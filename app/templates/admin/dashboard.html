@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Panel Principal — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-speedometer2 me-2 text-ucundi"></i>Panel Principal
+        </h2>
+        <p class="text-muted small mb-0">
+            Sesión activa: <strong>{{ current_user.nombre }} {{ current_user.apellido }}</strong>
+            — Rol: <span class="badge bg-ucundi">{{ current_user.get_role_name() | capitalize }}</span>
+        </p>
+    </div>
+</div>
+
+<!-- Tarjetas de estadísticas (solo admin) -->
+{% if current_user.get_role_name() == 'administrador' %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary-soft me-3">
+                    <i class="bi bi-people text-primary fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Total usuarios</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_usuarios }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success-soft me-3">
+                    <i class="bi bi-person-check text-success fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Usuarios activos</p>
+                    <h3 class="fw-bold mb-0">{{ stats.usuarios_activos }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-warning-soft me-3">
+                    <i class="bi bi-shield-check text-warning fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Roles registrados</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_roles }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Accesos rápidos admin -->
+<div class="row g-3">
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('admin.usuarios') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-people fs-1 text-primary mb-2"></i>
+                <h6 class="fw-bold mb-1">Gestionar Usuarios</h6>
+                <p class="text-muted small mb-0">Crear, editar y eliminar cuentas</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('admin.roles') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-shield-check fs-1 text-warning mb-2"></i>
+                <h6 class="fw-bold mb-1">Gestionar Roles</h6>
+                <p class="text-muted small mb-0">Ver y administrar roles del sistema</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card border-0 shadow-sm opacity-50">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-door-open fs-1 text-secondary mb-2"></i>
+                <h6 class="fw-bold mb-1">Espacios <span class="badge bg-secondary small">Sprint 2</span></h6>
+                <p class="text-muted small mb-0">Próximamente disponible</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Panel para otros roles -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+        <h5 class="fw-bold">Sesión iniciada correctamente</h5>
+        <p class="text-muted">
+            Bienvenido/a al sistema de préstamos de espacios y recursos de la Universidad de Cundinamarca.<br>
+            Las funcionalidades de tu panel estarán disponibles en los próximos sprints.
+        </p>
+        <span class="badge bg-ucundi px-3 py-2">
+            Rol: {{ current_user.get_role_name() | capitalize }}
+        </span>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

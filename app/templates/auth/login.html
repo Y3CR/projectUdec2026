@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión — UCundinamarca</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-login d-flex align-items-center min-vh-100">
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-5 col-lg-4">
+
+            <!-- Logo / Encabezado -->
+            <div class="text-center mb-4">
+                <div class="login-logo mb-3">
+                    <i class="bi bi-building text-white" style="font-size: 3rem;"></i>
+                </div>
+                <h4 class="text-white fw-bold">Sistema de Préstamos</h4>
+                <p class="text-white-50 small">Universidad de Cundinamarca</p>
+            </div>
+
+            <!-- Card de login -->
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-4">
+                    <h5 class="card-title text-center mb-4 fw-semibold text-dark">
+                        <i class="bi bi-lock me-2 text-ucundi"></i>Iniciar sesión
+                    </h5>
+
+                    <!-- Alertas flash (dentro del card) -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-sm py-2 small">
+                                {{ message }}
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+
+                    {% if request.args.get('msg') == 'logout' %}
+                    <div class="alert alert-info alert-sm py-2 small">
+                        <i class="bi bi-check-circle me-1"></i>Has cerrado sesión correctamente.
+                    </div>
+                    {% endif %}
+
+                    <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        <!-- Correo -->
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-semibold small">
+                                <i class="bi bi-envelope me-1"></i>Correo institucional
+                            </label>
+                            <input
+                                type="email"
+                                class="form-control {% if form.email.errors %}is-invalid{% endif %}"
+                                id="email"
+                                name="email"
+                                placeholder="usuario@ucundinamarca.edu.co"
+                                value="{{ form.email.data or '' }}"
+                                autofocus
+                            >
+                            {% for error in form.email.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Contraseña -->
+                        <div class="mb-3">
+                            <label for="password" class="form-label fw-semibold small">
+                                <i class="bi bi-key me-1"></i>Contraseña
+                            </label>
+                            <div class="input-group">
+                                <input
+                                    type="password"
+                                    class="form-control {% if form.password.errors %}is-invalid{% endif %}"
+                                    id="password"
+                                    name="password"
+                                    placeholder="••••••••"
+                                >
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                    <i class="bi bi-eye" id="eyeIcon"></i>
+                                </button>
+                                {% for error in form.password.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Recordarme -->
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
+                            <label class="form-check-label small" for="remember_me">Recordarme</label>
+                        </div>
+
+                        <!-- Botón -->
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-ucundi btn-lg fw-semibold">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <p class="text-center text-white-50 small mt-3">
+                ¿Problemas para acceder? Contacta al administrador del sistema.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+<script>
+    // Toggle mostrar/ocultar contraseña
+    document.getElementById('togglePassword').addEventListener('click', function () {
+        const pwd = document.getElementById('password');
+        const icon = document.getElementById('eyeIcon');
+        if (pwd.type === 'password') {
+            pwd.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            pwd.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    });
+</script>
+</body>
+</html>

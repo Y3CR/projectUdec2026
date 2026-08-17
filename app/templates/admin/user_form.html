@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}{{ accion }} Usuario — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('admin.usuarios') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h2 class="fw-bold mb-0">
+                    <i class="bi bi-person-{% if accion == 'Crear' %}plus{% else %}gear{% endif %} me-2 text-ucundi"></i>
+                    {{ accion }} Usuario
+                </h2>
+                <p class="text-muted small mb-0">
+                    {% if accion == 'Crear' %}HU-2: Registrar nuevo usuario{% else %}HU-2 / HU-3: Editar usuario y rol{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row g-3">
+
+                        <!-- Nombre -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-person me-1"></i>Nombre *
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="nombre"
+                                value="{{ usuario.nombre if usuario else data.get('nombre', '') }}"
+                                placeholder="Ej: Juan"
+                                required
+                            >
+                        </div>
+
+                        <!-- Apellido -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-person me-1"></i>Apellido *
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="apellido"
+                                value="{{ usuario.apellido if usuario else data.get('apellido', '') }}"
+                                placeholder="Ej: Pérez"
+                                required
+                            >
+                        </div>
+
+                        <!-- Correo -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-envelope me-1"></i>Correo institucional *
+                            </label>
+                            <input
+                                type="email"
+                                class="form-control"
+                                name="email"
+                                value="{{ usuario.email if usuario else data.get('email', '') }}"
+                                placeholder="usuario@ucundinamarca.edu.co"
+                                required
+                            >
+                            <div class="form-text text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Para roles internos (admin, docente, estudiante, operador) se requiere
+                                dominio <strong>@ucundinamarca.edu.co</strong>
+                            </div>
+                        </div>
+
+                        <!-- Rol -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-shield-check me-1"></i>Rol *
+                            </label>
+                            <select class="form-select" name="role_id" required>
+                                <option value="">— Selecciona un rol —</option>
+                                {% for rol in roles %}
+                                <option value="{{ rol.id }}"
+                                    {% if usuario and usuario.role_id == rol.id %}selected
+                                    {% elif data.get('role_id') and data.get('role_id')|int == rol.id %}selected
+                                    {% endif %}>
+                                    {{ rol.name | capitalize }} — {{ rol.description }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Contraseña -->
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">
+                                <i class="bi bi-key me-1"></i>
+                                Contraseña {% if accion == 'Editar' %}<span class="text-muted fw-normal">(dejar vacío para no cambiar)</span>{% else %}*{% endif %}
+                            </label>
+                            <div class="input-group">
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    name="password"
+                                    id="password"
+                                    placeholder="{% if accion == 'Editar' %}Nueva contraseña (opcional){% else %}Mínimo 8 caracteres{% endif %}"
+                                    {% if accion == 'Crear' %}required{% endif %}
+                                    minlength="8"
+                                >
+                                <button class="btn btn-outline-secondary" type="button" id="togglePwd">
+                                    <i class="bi bi-eye" id="eyeIcon"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Estado activo -->
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    id="activo"
+                                    name="activo"
+                                    {% if usuario %}{% if usuario.activo %}checked{% endif %}
+                                    {% else %}checked{% endif %}
+                                >
+                                <label class="form-check-label fw-semibold small" for="activo">
+                                    Usuario activo
+                                </label>
+                            </div>
+                        </div>
+
+                    </div><!-- /row -->
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-ucundi px-4">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {% if accion == 'Crear' %}Registrar usuario{% else %}Guardar cambios{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin.usuarios') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('togglePwd').addEventListener('click', function () {
+        const pwd = document.getElementById('password');
+        const icon = document.getElementById('eyeIcon');
+        if (pwd.type === 'password') {
+            pwd.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            pwd.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    });
+</script>
+{% endblock %}
