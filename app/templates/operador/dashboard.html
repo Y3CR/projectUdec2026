@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Panel Operador — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-speedometer2 me-2 text-ucundi"></i>Panel Operador
+        </h2>
+        <p class="text-muted small mb-0">
+            Bienvenido/a, <strong>{{ current_user.nombre }} {{ current_user.apellido }}</strong>
+        </p>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary-soft me-3">
+                    <i class="bi bi-door-open text-primary fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Total espacios</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_espacios }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success-soft me-3">
+                    <i class="bi bi-check-circle text-success fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Espacios disponibles</p>
+                    <h3 class="fw-bold mb-0">{{ stats.espacios_disponibles }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-warning-soft me-3">
+                    <i class="bi bi-laptop text-warning fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Total recursos</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_recursos }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-success-soft me-3">
+                    <i class="bi bi-box-seam text-success fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Recursos disponibles</p>
+                    <h3 class="fw-bold mb-0">{{ stats.recursos_disponibles }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <a href="{{ url_for('operador.espacios') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-door-open fs-1 text-primary mb-2"></i>
+                <h6 class="fw-bold mb-1">Gestionar Espacios</h6>
+                <p class="text-muted small mb-0">Registrar, editar y eliminar salas, laboratorios y más</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6">
+        <a href="{{ url_for('operador.recursos') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-laptop fs-1 text-warning mb-2"></i>
+                <h6 class="fw-bold mb-1">Gestionar Recursos</h6>
+                <p class="text-muted small mb-0">Administrar equipos, materiales y recursos institucionales</p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ accion }} Espacio — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('operador.espacios') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h2 class="fw-bold mb-0">
+                    <i class="bi bi-door-open me-2 text-ucundi"></i>{{ accion }} Espacio
+                </h2>
+                <p class="text-muted small mb-0">HU-4: Gestión de espacios físicos</p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <div class="row g-3">
+
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small">Nombre del espacio *</label>
+                            <input type="text" class="form-control" name="nombre"
+                                value="{{ espacio.nombre if espacio else data.get('nombre', '') }}"
+                                placeholder="Ej: Laboratorio de Sistemas 1" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Código *</label>
+                            <input type="text" class="form-control" name="codigo"
+                                value="{{ espacio.codigo if espacio else data.get('codigo', '') }}"
+                                placeholder="Ej: LAB-SIS-01" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Tipo de espacio *</label>
+                            <select class="form-select" name="tipo_id" required>
+                                <option value="">— Selecciona —</option>
+                                {% for tipo in tipos %}
+                                <option value="{{ tipo.id }}"
+                                    {% if espacio and espacio.tipo_id == tipo.id %}selected
+                                    {% elif data.get('tipo_id') and data.get('tipo_id')|int == tipo.id %}selected
+                                    {% endif %}>
+                                    {{ tipo.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Capacidad (personas) *</label>
+                            <input type="number" class="form-control" name="capacidad" min="1"
+                                value="{{ espacio.capacidad if espacio else data.get('capacidad', 1) }}"
+                                required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Ubicación</label>
+                            <input type="text" class="form-control" name="ubicacion"
+                                value="{{ espacio.ubicacion if espacio else data.get('ubicacion', '') }}"
+                                placeholder="Ej: Bloque B, Piso 2">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Descripción</label>
+                            <textarea class="form-control" name="descripcion" rows="3"
+                                placeholder="Descripción opcional del espacio">{{ espacio.descripcion if espacio else data.get('descripcion', '') }}</textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="disponible" name="disponible"
+                                    {% if espacio %}{% if espacio.disponible %}checked{% endif %}
+                                    {% else %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold small" for="disponible">
+                                    Espacio disponible
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+                    <hr class="my-4">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-ucundi px-4">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {% if accion == 'Registrar' %}Registrar espacio{% else %}Guardar cambios{% endif %}
+                        </button>
+                        <a href="{{ url_for('operador.espacios') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

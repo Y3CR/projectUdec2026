@@ -98,7 +98,7 @@ def _redirect_by_role(user):
     if role_name == 'administrador':
         return redirect(url_for('admin.dashboard'))
     elif role_name == 'operador':
-        return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('operador.dashboard'))
     elif role_name == 'docente':
         return redirect(url_for('admin.dashboard'))
     elif role_name == 'estudiante':

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ accion }} Recurso — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('operador.recursos') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h2 class="fw-bold mb-0">
+                    <i class="bi bi-laptop me-2 text-ucundi"></i>{{ accion }} Recurso
+                </h2>
+                <p class="text-muted small mb-0">HU-5: Gestión de recursos físicos</p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <div class="row g-3">
+
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small">Nombre del recurso *</label>
+                            <input type="text" class="form-control" name="nombre"
+                                value="{{ recurso.nombre if recurso else data.get('nombre', '') }}"
+                                placeholder="Ej: Portátil Dell Inspiron" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Código *</label>
+                            <input type="text" class="form-control" name="codigo"
+                                value="{{ recurso.codigo if recurso else data.get('codigo', '') }}"
+                                placeholder="Ej: PC-001" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Categoría *</label>
+                            <select class="form-select" name="categoria_id" required>
+                                <option value="">— Selecciona —</option>
+                                {% for cat in categorias %}
+                                <option value="{{ cat.id }}"
+                                    {% if recurso and recurso.categoria_id == cat.id %}selected
+                                    {% elif data.get('categoria_id') and data.get('categoria_id')|int == cat.id %}selected
+                                    {% endif %}>
+                                    {{ cat.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Estado *</label>
+                            <select class="form-select" name="estado" required>
+                                {% for est in estados %}
+                                <option value="{{ est }}"
+                                    {% if recurso and recurso.estado == est %}selected
+                                    {% elif data.get('estado') == est %}selected
+                                    {% elif not recurso and not data.get('estado') and est == 'disponible' %}selected
+                                    {% endif %}>
+                                    {{ est | replace('_', ' ') | capitalize }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Cantidad total *</label>
+                            <input type="number" class="form-control" name="cantidad_total" min="1"
+                                value="{{ recurso.cantidad_total if recurso else data.get('cantidad_total', 1) }}"
+                                required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Cantidad disponible *</label>
+                            <input type="number" class="form-control" name="cantidad_disponible" min="0"
+                                value="{{ recurso.cantidad_disponible if recurso else data.get('cantidad_disponible', 1) }}"
+                                required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Descripción</label>
+                            <textarea class="form-control" name="descripcion" rows="3"
+                                placeholder="Descripción opcional del recurso">{{ recurso.descripcion if recurso else data.get('descripcion', '') }}</textarea>
+                        </div>
+
+                    </div>
+                    <hr class="my-4">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-ucundi px-4">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {% if accion == 'Registrar' %}Registrar recurso{% else %}Guardar cambios{% endif %}
+                        </button>
+                        <a href="{{ url_for('operador.recursos') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

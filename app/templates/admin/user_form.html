@@ -28,57 +28,37 @@
 
                     <div class="row g-3">
 
-                        <!-- Nombre -->
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">
                                 <i class="bi bi-person me-1"></i>Nombre *
                             </label>
-                            <input
-                                type="text"
-                                class="form-control"
-                                name="nombre"
+                            <input type="text" class="form-control" name="nombre"
                                 value="{{ usuario.nombre if usuario else data.get('nombre', '') }}"
-                                placeholder="Ej: Juan"
-                                required
-                            >
+                                placeholder="Ej: Juan" required>
                         </div>
 
-                        <!-- Apellido -->
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small">
                                 <i class="bi bi-person me-1"></i>Apellido *
                             </label>
-                            <input
-                                type="text"
-                                class="form-control"
-                                name="apellido"
+                            <input type="text" class="form-control" name="apellido"
                                 value="{{ usuario.apellido if usuario else data.get('apellido', '') }}"
-                                placeholder="Ej: Pérez"
-                                required
-                            >
+                                placeholder="Ej: Pérez" required>
                         </div>
 
-                        <!-- Correo -->
                         <div class="col-12">
                             <label class="form-label fw-semibold small">
                                 <i class="bi bi-envelope me-1"></i>Correo institucional *
                             </label>
-                            <input
-                                type="email"
-                                class="form-control"
-                                name="email"
+                            <input type="email" class="form-control" name="email"
                                 value="{{ usuario.email if usuario else data.get('email', '') }}"
-                                placeholder="usuario@ucundinamarca.edu.co"
-                                required
-                            >
+                                placeholder="usuario@ucundinamarca.edu.co" required>
                             <div class="form-text text-muted">
                                 <i class="bi bi-info-circle me-1"></i>
-                                Para roles internos (admin, docente, estudiante, operador) se requiere
-                                dominio <strong>@ucundinamarca.edu.co</strong>
+                                Para roles internos se requiere dominio <strong>@ucundinamarca.edu.co</strong>
                             </div>
                         </div>
 
-                        <!-- Rol -->
                         <div class="col-12">
                             <label class="form-label fw-semibold small">
                                 <i class="bi bi-shield-check me-1"></i>Rol *
@@ -96,46 +76,33 @@
                             </select>
                         </div>
 
-                        <!-- Contraseña -->
                         <div class="col-12">
                             <label class="form-label fw-semibold small">
                                 <i class="bi bi-key me-1"></i>
                                 Contraseña {% if accion == 'Editar' %}<span class="text-muted fw-normal">(dejar vacío para no cambiar)</span>{% else %}*{% endif %}
                             </label>
                             <div class="input-group">
-                                <input
-                                    type="password"
-                                    class="form-control"
-                                    name="password"
-                                    id="password"
+                                <input type="password" class="form-control" name="password" id="password"
                                     placeholder="{% if accion == 'Editar' %}Nueva contraseña (opcional){% else %}Mínimo 8 caracteres{% endif %}"
-                                    {% if accion == 'Crear' %}required{% endif %}
-                                    minlength="8"
-                                >
+                                    {% if accion == 'Crear' %}required{% endif %} minlength="8">
                                 <button class="btn btn-outline-secondary" type="button" id="togglePwd">
                                     <i class="bi bi-eye" id="eyeIcon"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Estado activo -->
                         <div class="col-12">
                             <div class="form-check form-switch">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    id="activo"
-                                    name="activo"
+                                <input class="form-check-input" type="checkbox" id="activo" name="activo"
                                     {% if usuario %}{% if usuario.activo %}checked{% endif %}
-                                    {% else %}checked{% endif %}
-                                >
+                                    {% else %}checked{% endif %}>
                                 <label class="form-check-label fw-semibold small" for="activo">
                                     Usuario activo
                                 </label>
                             </div>
                         </div>
 
-                    </div><!-- /row -->
+                    </div>
 
                     <hr class="my-4">
 

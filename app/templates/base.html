@@ -21,12 +21,13 @@
         </button>
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav me-auto">
+
+                {% if current_user.get_role_name() == 'administrador' %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('admin.dashboard') }}">
                         <i class="bi bi-speedometer2 me-1"></i>Panel
                     </a>
                 </li>
-                {% if current_user.get_role_name() == 'administrador' %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('admin.usuarios') }}">
                         <i class="bi bi-people me-1"></i>Usuarios
@@ -37,7 +38,51 @@
                         <i class="bi bi-shield-check me-1"></i>Roles
                     </a>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-box-seam me-1"></i>Inventario
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.espacios') }}">
+                                <i class="bi bi-door-open me-1"></i>Espacios
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.recursos') }}">
+                                <i class="bi bi-laptop me-1"></i>Recursos
+                            </a>
+                        </li>
+                    </ul>
+                </li>
                 {% endif %}
+
+                {% if current_user.get_role_name() == 'operador' %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('operador.dashboard') }}">
+                        <i class="bi bi-speedometer2 me-1"></i>Panel
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('operador.espacios') }}">
+                        <i class="bi bi-door-open me-1"></i>Espacios
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('operador.recursos') }}">
+                        <i class="bi bi-laptop me-1"></i>Recursos
+                    </a>
+                </li>
+                {% endif %}
+
+                {% if current_user.get_role_name() in ['docente', 'estudiante', 'invitado'] %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('admin.dashboard') }}">
+                        <i class="bi bi-speedometer2 me-1"></i>Panel
+                    </a>
+                </li>
+                {% endif %}
+
             </ul>
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item dropdown">
@@ -82,19 +127,16 @@
 <script>
     let inactividadTimer;
     const TIEMPO_INACTIVIDAD = 30 * 60 * 1000;
-
     function resetTimer() {
         clearTimeout(inactividadTimer);
         inactividadTimer = setTimeout(() => {
-            alert('Tu sesión ha expirado por inactividad. Serás redirigido al inicio de sesión.');
+            alert('Tu sesión ha expirado por inactividad.');
             window.location.href = "{{ url_for('auth.logout') }}";
         }, TIEMPO_INACTIVIDAD);
     }
-
-    ['mousemove', 'keypress', 'click', 'scroll', 'touchstart'].forEach(evento => {
-        document.addEventListener(evento, resetTimer, true);
+    ['mousemove', 'keypress', 'click', 'scroll', 'touchstart'].forEach(e => {
+        document.addEventListener(e, resetTimer, true);
     });
-
     resetTimer();
 </script>
 {% endif %}

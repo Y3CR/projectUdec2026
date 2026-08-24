@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# projectUdec2026
-DESARROLLO E IMPLEMENTACIÓN DE UNA PLATAFORMA WEB PARA EL  CONTROL Y LA ADMINISTRACIÓN DE ESPACIOS Y RECURSOS FÍSICOS  UNIVERSITARIOS BASADA EN DATOS DE TECNOLOGÍA DE IDENTIFICACIÓN  INMEDIATA (RFID, QR, CÓDIGO DE BARRAS), EN LA UNIVERSIDAD DE  CUNDINAMARCA, EXTENSIÓN FACATATIVÁ.
-=======
 # Sistema de Préstamos de Espacios y Recursos — UCundinamarca
 
 Sistema web para gestionar préstamos de espacios físicos y recursos institucionales, construido con Python + Flask.
@@ -9,7 +5,7 @@ Sistema web para gestionar préstamos de espacios físicos y recursos institucio
 ## Stack tecnológico
 
 - **Backend:** Python 3.10+ / Flask 3.0
-- **Base de datos:** SQLite (desarrollo) — fácilmente migrable a PostgreSQL
+- **Base de datos:** SQLite (desarrollo)
 - **ORM:** Flask-SQLAlchemy
 - **Autenticación:** Flask-Login
 - **Formularios:** Flask-WTF / WTForms
@@ -36,15 +32,13 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Abre tu navegador en: **http://127.0.0.1:5000/auth/login**
+Abre tu navegador en: **http://127.0.0.1:5000**
 
 ### Credenciales por defecto (admin)
 | Campo | Valor |
 |---|---|
 | Correo | `admin@ucundinamarca.edu.co` |
 | Contraseña | `Admin123*` |
-
-> ⚠️ Cambia la contraseña del admin después del primer inicio de sesión.
 
 ---
 
@@ -53,7 +47,7 @@ Abre tu navegador en: **http://127.0.0.1:5000/auth/login**
 | Sprint | Descripción | Estado |
 |---|---|---|
 | **Sprint 1** | Autenticación y gestión de usuarios/roles | ✅ Completado |
-| Sprint 2 | Gestión de espacios y recursos | 🔜 Pendiente |
+| **Sprint 2** | Gestión de espacios y recursos | ✅ Completado |
 | Sprint 3 | Solicitudes, asignación y préstamos | 🔜 Pendiente |
 | Sprint 4 | Historial, reportes y exportación | 🔜 Pendiente |
 | Sprint 5 | Control de acceso RFID/QR y trazabilidad | 🔜 Pendiente |
@@ -69,4 +63,12 @@ Abre tu navegador en: **http://127.0.0.1:5000/auth/login**
 - ✅ Gestión CRUD de usuarios (admin)
 - ✅ Gestión de roles (admin)
 - ✅ Panel diferenciado por rol
->>>>>>> 1539b97 (Sprint 1: autenticación, gestión de usuarios y roles)
+
+## Funcionalidades Sprint 2
+
+- ✅ Panel exclusivo para operador
+- ✅ Gestión CRUD de espacios físicos (salones, laboratorios, auditorios, etc.)
+- ✅ Gestión CRUD de recursos físicos (equipos, material deportivo, etc.)
+- ✅ Filtros por tipo, categoría, estado y disponibilidad
+- ✅ Control de cantidad total y cantidad disponible por recurso
+- ✅ Acceso a inventario también desde el panel administrador

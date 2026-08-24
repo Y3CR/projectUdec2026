@@ -15,17 +15,12 @@
     </a>
 </div>
 
-<!-- Búsqueda -->
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <form method="GET" class="d-flex gap-2">
-            <input
-                type="text"
-                class="form-control form-control-sm"
-                name="q"
+            <input type="text" class="form-control form-control-sm" name="q"
                 placeholder="Buscar por nombre, apellido o correo..."
-                value="{{ busqueda }}"
-            >
+                value="{{ busqueda }}">
             <button class="btn btn-outline-secondary btn-sm" type="submit">
                 <i class="bi bi-search"></i>
             </button>
@@ -38,7 +33,6 @@
     </div>
 </div>
 
-<!-- Tabla -->
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -58,9 +52,7 @@
                     {% for usuario in usuarios.items %}
                     <tr>
                         <td class="ps-3 text-muted small">{{ usuario.id }}</td>
-                        <td>
-                            <strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>
-                        </td>
+                        <td><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong></td>
                         <td class="text-muted small">{{ usuario.email }}</td>
                         <td>
                             <span class="badge
@@ -127,7 +119,6 @@
     </div>
 </div>
 
-<!-- Paginación -->
 {% if usuarios.pages > 1 %}
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
