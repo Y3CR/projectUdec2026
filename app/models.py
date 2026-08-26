@@ -29,6 +29,14 @@ class User(UserMixin, db.Model):
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Especificar foreign_keys para evitar ambigüedad con operador_id
+    solicitudes = db.relationship(
+        'Solicitud',
+        foreign_keys='Solicitud.usuario_id',
+        backref='usuario',
+        lazy='dynamic'
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -88,9 +96,10 @@ class Espacio(db.Model):
     disponible = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    solicitudes = db.relationship('Solicitud', backref='espacio', lazy='dynamic')
 
     def __repr__(self):
-        return f'<Espacio {self.codigo} - {self.nombre}>'
+        return f'<Espacio {self.codigo}>'
 
 
 # ── Sprint 2: Recursos ─────────────────────────────────────────────────────────
@@ -113,11 +122,60 @@ class Recurso(db.Model):
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'), nullable=False)
     descripcion = db.Column(db.Text)
     estado = db.Column(db.String(50), default='disponible')
-    # estados: disponible, prestado, mantenimiento, dañado, dado_de_baja
     cantidad_total = db.Column(db.Integer, default=1)
     cantidad_disponible = db.Column(db.Integer, default=1)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    solicitudes = db.relationship('Solicitud', backref='recurso', lazy='dynamic')
 
     def __repr__(self):
-        return f'<Recurso {self.codigo} - {self.nombre}>'
+        return f'<Recurso {self.codigo}>'
+
+
+# ── Sprint 3: Solicitudes y préstamos ─────────────────────────────────────────
+
+class Solicitud(db.Model):
+    __tablename__ = 'solicitudes'
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    tipo = db.Column(db.String(20), nullable=False)  # 'espacio' o 'recurso'
+    espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
+    recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=True)
+
+    fecha_inicio = db.Column(db.DateTime, nullable=False)
+    fecha_fin = db.Column(db.DateTime, nullable=False)
+    motivo = db.Column(db.Text)
+
+    estado = db.Column(db.String(20), default='pendiente')
+    motivo_rechazo = db.Column(db.Text)
+
+    # Especificar foreign_keys explícitamente para evitar ambigüedad
+    operador_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    operador = db.relationship(
+        'User',
+        foreign_keys=[operador_id]
+    )
+    fecha_gestion = db.Column(db.DateTime, nullable=True)
+
+    fecha_devolucion_real = db.Column(db.DateTime, nullable=True)
+    estado_devolucion = db.Column(db.String(50), nullable=True)
+    novedad_devolucion = db.Column(db.Text, nullable=True)
+    tiempo_uso_minutos = db.Column(db.Integer, nullable=True)
+
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def calcular_tiempo_uso(self):
+        if self.fecha_devolucion_real and self.fecha_inicio:
+            delta = self.fecha_devolucion_real - self.fecha_inicio
+            self.tiempo_uso_minutos = int(delta.total_seconds() / 60)
+
+    def get_item_nombre(self):
+        if self.tipo == 'espacio' and self.espacio:
+            return self.espacio.nombre
+        elif self.tipo == 'recurso' and self.recurso:
+            return self.recurso.nombre
+        return '—'
+
+    def __repr__(self):
+        return f'<Solicitud {self.id} - {self.estado}>'

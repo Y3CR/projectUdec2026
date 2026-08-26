@@ -10,6 +10,7 @@ login_manager = LoginManager()
 mail = Mail()
 csrf = CSRFProtect()
 
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -31,6 +32,9 @@ def create_app(config_class=Config):
 
     from app.operador import bp as operador_bp
     app.register_blueprint(operador_bp, url_prefix='/operador')
+
+    from app.prestamos import bp as prestamos_bp
+    app.register_blueprint(prestamos_bp, url_prefix='/prestamos')
 
     @app.route('/')
     def index():

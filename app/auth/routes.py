@@ -9,7 +9,6 @@ from app.models import User
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
-    # Verificar sesión directamente en la cookie, no en current_user
     if '_user_id' in session:
         return _redirect_by_role(current_user)
 
@@ -85,7 +84,6 @@ def login():
 @bp.route('/logout')
 def logout():
     logout_user()
-    # Eliminar explícitamente la clave de usuario de la sesión
     session.pop('_user_id', None)
     session.pop('_fresh', None)
     session.pop('_id', None)
@@ -99,10 +97,8 @@ def _redirect_by_role(user):
         return redirect(url_for('admin.dashboard'))
     elif role_name == 'operador':
         return redirect(url_for('operador.dashboard'))
-    elif role_name == 'docente':
-        return redirect(url_for('admin.dashboard'))
-    elif role_name == 'estudiante':
-        return redirect(url_for('admin.dashboard'))
+    elif role_name in ['docente', 'estudiante']:
+        return redirect(url_for('prestamos.mis_solicitudes'))
     elif role_name == 'invitado':
-        return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('prestamos.mis_solicitudes'))
     return redirect(url_for('admin.dashboard'))
