@@ -107,6 +107,7 @@
                                   action="{{ url_for('operador.eliminar_recurso', recurso_id=recurso.id) }}"
                                   class="d-inline"
                                   onsubmit="return confirm('¿Eliminar el recurso {{ recurso.nombre }}?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                                     <i class="bi bi-trash"></i>
                                 </button>
