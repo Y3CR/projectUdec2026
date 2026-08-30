@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Reportes — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-file-earmark-bar-graph me-2 text-ucundi"></i>Reportes del sistema
+        </h2>
+        <p class="text-muted small mb-0">HU-16 / HU-17: Generar, filtrar y exportar reportes</p>
+    </div>
+</div>
+
+<!-- Tarjetas resumen -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="fw-bold fs-3 text-ucundi">{{ stats.total }}</div>
+            <div class="text-muted small">Total</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="fw-bold fs-3 text-secondary">{{ stats.pendientes }}</div>
+            <div class="text-muted small">Pendientes</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="fw-bold fs-3 text-success">{{ stats.aprobadas }}</div>
+            <div class="text-muted small">Aprobadas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="fw-bold fs-3 text-danger">{{ stats.rechazadas }}</div>
+            <div class="text-muted small">Rechazadas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="fw-bold fs-3 text-info">{{ stats.devueltas }}</div>
+            <div class="text-muted small">Devueltas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <form method="GET" class="row g-2 align-items-end" id="formFiltros">
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Estado</label>
+                <select class="form-select form-select-sm" name="estado">
+                    <option value="">Todos</option>
+                    <option value="pendiente" {% if estado_filtro == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                    <option value="aprobada" {% if estado_filtro == 'aprobada' %}selected{% endif %}>Aprobada</option>
+                    <option value="rechazada" {% if estado_filtro == 'rechazada' %}selected{% endif %}>Rechazada</option>
+                    <option value="devuelta" {% if estado_filtro == 'devuelta' %}selected{% endif %}>Devuelta</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Tipo</label>
+                <select class="form-select form-select-sm" name="tipo">
+                    <option value="">Todos</option>
+                    <option value="espacio" {% if tipo_filtro == 'espacio' %}selected{% endif %}>Espacio</option>
+                    <option value="recurso" {% if tipo_filtro == 'recurso' %}selected{% endif %}>Recurso</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Usuario</label>
+                <select class="form-select form-select-sm" name="usuario_id">
+                    <option value="0">Todos los usuarios</option>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}" {% if usuario_filtro == u.id %}selected{% endif %}>
+                        {{ u.nombre }} {{ u.apellido }} ({{ u.get_role_name() | capitalize }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Desde</label>
+                <input type="date" class="form-control form-control-sm" name="fecha_desde"
+                    value="{{ fecha_desde }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Hasta</label>
+                <input type="date" class="form-control form-control-sm" name="fecha_hasta"
+                    value="{{ fecha_hasta }}">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-ucundi btn-sm" type="submit">
+                    <i class="bi bi-search me-1"></i>Filtrar
+                </button>
+                <a href="{{ url_for('reportes.reportes') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Botones exportar -->
+<div class="d-flex gap-2 mb-3">
+    <a href="{{ url_for('reportes.exportar_pdf', estado=estado_filtro, tipo=tipo_filtro, usuario_id=usuario_filtro, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}"
+       class="btn btn-danger btn-sm">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF
+    </a>
+    <a href="{{ url_for('reportes.exportar_excel', estado=estado_filtro, tipo=tipo_filtro, usuario_id=usuario_filtro, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}"
+       class="btn btn-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+    </a>
+</div>
+
+<!-- Tabla -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>Usuario</th>
+                        <th>Tipo</th>
+                        <th>Item</th>
+                        <th>Fecha inicio</th>
+                        <th>Fecha fin</th>
+                        <th class="text-center">Estado</th>
+                        <th>Tiempo uso</th>
+                        <th>Gestionado por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in solicitudes.items %}
+                    <tr>
+                        <td class="ps-3 text-muted small">{{ s.id }}</td>
+                        <td>
+                            <strong>{{ s.usuario.nombre }} {{ s.usuario.apellido }}</strong>
+                            <br><span class="text-muted small">{{ s.usuario.get_role_name() | capitalize }}</span>
+                        </td>
+                        <td>
+                            {% if s.tipo == 'espacio' %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Espacio</span>
+                            {% else %}
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Recurso</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ s.get_item_nombre() }}</strong></td>
+                        <td class="small">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="small">{{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="text-center">
+                            {% if s.estado == 'pendiente' %}
+                            <span class="badge bg-secondary">Pendiente</span>
+                            {% elif s.estado == 'aprobada' %}
+                            <span class="badge bg-success">Aprobada</span>
+                            {% elif s.estado == 'rechazada' %}
+                            <span class="badge bg-danger">Rechazada</span>
+                            {% elif s.estado == 'devuelta' %}
+                            <span class="badge bg-info text-dark">Devuelta</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if s.tiempo_uso_minutos is not none %}
+                                {{ s.tiempo_uso_minutos // 60 }}h {{ s.tiempo_uso_minutos % 60 }}min
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="small text-muted">
+                            {% if s.operador %}
+                                {{ s.operador.nombre }} {{ s.operador.apellido }}
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No hay registros con estos filtros.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if solicitudes.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not solicitudes.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('reportes.reportes', page=solicitudes.prev_num, estado=estado_filtro, tipo=tipo_filtro, usuario_id=usuario_filtro, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% for p in solicitudes.iter_pages() %}
+            {% if p %}
+            <li class="page-item {% if p == solicitudes.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('reportes.reportes', page=p, estado=estado_filtro, tipo=tipo_filtro, usuario_id=usuario_filtro, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not solicitudes.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('reportes.reportes', page=solicitudes.next_num, estado=estado_filtro, tipo=tipo_filtro, usuario_id=usuario_filtro, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+    <p class="text-center text-muted small">{{ solicitudes.total }} registros en total</p>
+</nav>
+{% endif %}
+{% endblock %}

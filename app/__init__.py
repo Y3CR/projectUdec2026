@@ -36,6 +36,9 @@ def create_app(config_class=Config):
     from app.prestamos import bp as prestamos_bp
     app.register_blueprint(prestamos_bp, url_prefix='/prestamos')
 
+    from app.reportes import bp as reportes_bp
+    app.register_blueprint(reportes_bp, url_prefix='/reportes')
+
     @app.route('/')
     def index():
         return redirect(url_for('auth.login'))
