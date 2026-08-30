@@ -39,6 +39,9 @@ def create_app(config_class=Config):
     from app.reportes import bp as reportes_bp
     app.register_blueprint(reportes_bp, url_prefix='/reportes')
 
+    from app.api import bp as api_bp
+    app.register_blueprint(api_bp, url_prefix='/api')
+
     @app.route('/')
     def index():
         return redirect(url_for('auth.login'))

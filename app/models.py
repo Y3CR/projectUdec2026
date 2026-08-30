@@ -139,7 +139,7 @@ class Solicitud(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
-    tipo = db.Column(db.String(20), nullable=False)  # 'espacio' o 'recurso'
+    tipo = db.Column(db.String(20), nullable=False)
     espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
     recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=True)
 
@@ -150,12 +150,8 @@ class Solicitud(db.Model):
     estado = db.Column(db.String(20), default='pendiente')
     motivo_rechazo = db.Column(db.Text)
 
-    # Especificar foreign_keys explícitamente para evitar ambigüedad
     operador_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    operador = db.relationship(
-        'User',
-        foreign_keys=[operador_id]
-    )
+    operador = db.relationship('User', foreign_keys=[operador_id])
     fecha_gestion = db.Column(db.DateTime, nullable=True)
 
     fecha_devolucion_real = db.Column(db.DateTime, nullable=True)
@@ -179,3 +175,27 @@ class Solicitud(db.Model):
 
     def __repr__(self):
         return f'<Solicitud {self.id} - {self.estado}>'
+
+
+# ── Sprint 5: Registros de acceso RFID/QR ─────────────────────────────────────
+
+class RegistroAcceso(db.Model):
+    __tablename__ = 'registros_acceso'
+    id = db.Column(db.Integer, primary_key=True)
+
+    uid_tarjeta = db.Column(db.String(50), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    usuario = db.relationship('User', foreign_keys=[usuario_id])
+    espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
+    espacio = db.relationship('Espacio', foreign_keys=[espacio_id])
+
+    tipo_evento = db.Column(db.String(20), default='entrada')
+    metodo = db.Column(db.String(20), default='rfid')
+    autorizado = db.Column(db.Boolean, default=False)
+    motivo_denegacion = db.Column(db.String(200), nullable=True)
+    fecha_evento = db.Column(db.DateTime, default=datetime.utcnow)
+
+    tiempo_permanencia_minutos = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<RegistroAcceso {self.id} - {self.uid_tarjeta} - {"✅" if self.autorizado else "❌"}>'
