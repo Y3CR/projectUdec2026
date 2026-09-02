@@ -43,6 +43,9 @@ def create_app(config_class=Config):
     app.register_blueprint(api_bp, url_prefix='/api')
     csrf.exempt(api_bp)
 
+    from app.accesos import bp as accesos_bp
+    app.register_blueprint(accesos_bp, url_prefix='/accesos')
+
     @app.route('/')
     def index():
         return redirect(url_for('auth.login'))
