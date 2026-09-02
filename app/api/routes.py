@@ -3,10 +3,16 @@ from datetime import datetime
 from app import db
 from app.api import bp
 from app.models import User, Espacio, Solicitud
+import pytz
 
-# Clave secreta para autenticar el ESP32
+# ── Zona horaria Colombia ──────────────────────────────────────────────────────
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def ahora_bogota():
+    return datetime.now(BOGOTA_TZ).replace(tzinfo=None)
+
+# ── Clave secreta para autenticar el ESP32 ────────────────────────────────────
 API_KEY = 'ucundinamarca-rfid-2024'
-
 
 def verificar_api_key():
     key = request.headers.get('X-API-KEY', '')
@@ -27,7 +33,6 @@ def registrar_acceso():
         "autorizado": true
     }
     """
-    # Verificar API key
     if not verificar_api_key():
         return jsonify({'error': 'No autorizado', 'code': 401}), 401
 
@@ -35,7 +40,6 @@ def registrar_acceso():
     if not data:
         return jsonify({'error': 'JSON inválido'}), 400
 
-    # Campos requeridos
     uid_tarjeta    = data.get('uid_tarjeta', '').strip().upper()
     usuario_email  = data.get('usuario_email', '').strip().lower()
     espacio_codigo = data.get('espacio_codigo', '').strip().upper()
@@ -46,18 +50,16 @@ def registrar_acceso():
     if not uid_tarjeta or not espacio_codigo:
         return jsonify({'error': 'uid_tarjeta y espacio_codigo son requeridos'}), 400
 
-    # Buscar usuario
     usuario = User.query.filter_by(email=usuario_email).first()
     usuario_id = usuario.id if usuario else None
 
-    # Buscar espacio
     espacio = Espacio.query.filter_by(codigo=espacio_codigo).first()
     espacio_id = espacio.id if espacio else None
 
-    # Verificar si tiene solicitud aprobada activa (solo si el usuario existe)
+    # ✅ CORREGIDO: usar hora Bogotá en vez de utcnow()
     acceso_valido = False
     if usuario and espacio and autorizado:
-        ahora = datetime.utcnow()
+        ahora = ahora_bogota()
         solicitud_activa = Solicitud.query.filter(
             Solicitud.usuario_id == usuario.id,
             Solicitud.espacio_id == espacio.id,
@@ -66,8 +68,7 @@ def registrar_acceso():
             Solicitud.fecha_fin >= ahora
         ).first()
         acceso_valido = solicitud_activa is not None
-    
-    # Guardar registro de acceso
+
     from app.models import RegistroAcceso
     registro = RegistroAcceso(
         uid_tarjeta=uid_tarjeta,
@@ -79,12 +80,11 @@ def registrar_acceso():
         motivo_denegacion=None if acceso_valido else _motivo_denegacion(
             usuario, espacio, autorizado
         ),
-        fecha_evento=datetime.utcnow()
+        fecha_evento=ahora_bogota()  # ✅ CORREGIDO
     )
     db.session.add(registro)
     db.session.commit()
 
-    # Respuesta al ESP32
     return jsonify({
         'success': True,
         'registro_id': registro.id,
@@ -93,7 +93,7 @@ def registrar_acceso():
         'usuario': f"{usuario.nombre} {usuario.apellido}" if usuario else 'Desconocido',
         'espacio': espacio.nombre if espacio else espacio_codigo,
         'tipo_evento': tipo_evento,
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': ahora_bogota().isoformat()  # ✅ CORREGIDO
     }), 200
 
 
@@ -103,7 +103,7 @@ def estado_api():
     return jsonify({
         'status': 'online',
         'sistema': 'UCundinamarca Préstamos',
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': ahora_bogota().isoformat()  # ✅ CORREGIDO
     }), 200
 
 

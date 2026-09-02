@@ -199,3 +199,6 @@ class RegistroAcceso(db.Model):
 
     def __repr__(self):
         return f'<RegistroAcceso {self.id} - {self.uid_tarjeta} - {"✅" if self.autorizado else "❌"}>'
+
+
+    

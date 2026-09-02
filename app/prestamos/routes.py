@@ -1,10 +1,18 @@
 from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
+import pytz
 from app import db
 from app.prestamos import bp
 from app.models import Solicitud, Espacio, Recurso, User
+
+# Zona horaria de Colombia
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def ahora_bogota():
+    """Retorna la fecha/hora actual en Colombia, sin tzinfo (naive), para comparar con fechas del formulario."""
+    return datetime.now(BOGOTA_TZ).replace(tzinfo=None)
 
 
 # ── Decoradores ────────────────────────────────────────────────────────────────
@@ -66,7 +74,8 @@ def solicitar():
                 fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%dT%H:%M')
                 if fecha_inicio >= fecha_fin:
                     errores.append('La fecha de fin debe ser posterior a la de inicio.')
-                if fecha_inicio < datetime.utcnow():
+                # ✅ CORREGIDO: comparar contra hora actual en Bogotá con margen de 5 minutos
+                if fecha_inicio < ahora_bogota() - timedelta(minutes=5):
                     errores.append('La fecha de inicio no puede ser en el pasado.')
             except ValueError:
                 errores.append('Formato de fecha inválido.')
@@ -90,7 +99,6 @@ def solicitar():
                 return render_template('prestamos/solicitar.html',
                                        espacios=espacios, recursos=recursos, data=request.form)
 
-            # Verificar cruce de fechas con solicitudes aprobadas
             cruce = Solicitud.query.filter(
                 Solicitud.espacio_id == espacio_id,
                 Solicitud.estado == 'aprobada',
@@ -124,7 +132,6 @@ def solicitar():
         db.session.add(solicitud)
         db.session.commit()
 
-        # HU-21: Notificación por correo (intento, no bloquea si falla)
         _notificar_nueva_solicitud(solicitud)
 
         flash('Solicitud enviada correctamente. Estado: Pendiente de aprobación.', 'success')
@@ -189,7 +196,6 @@ def aprobar(solicitud_id):
         flash('Solo se pueden aprobar solicitudes pendientes.', 'warning')
         return redirect(url_for('prestamos.gestionar'))
 
-    # Verificar disponibilidad al momento de aprobar
     if solicitud.tipo == 'espacio' and solicitud.espacio:
         cruce = Solicitud.query.filter(
             Solicitud.espacio_id == solicitud.espacio_id,
@@ -206,14 +212,14 @@ def aprobar(solicitud_id):
         if solicitud.recurso.cantidad_disponible <= 0:
             flash('No se puede aprobar: el recurso no tiene unidades disponibles.', 'danger')
             return redirect(url_for('prestamos.gestionar'))
-        # Descontar unidad disponible
         solicitud.recurso.cantidad_disponible -= 1
         if solicitud.recurso.cantidad_disponible == 0:
             solicitud.recurso.estado = 'prestado'
 
     solicitud.estado = 'aprobada'
     solicitud.operador_id = current_user.id
-    solicitud.fecha_gestion = datetime.utcnow()
+    # ✅ CORREGIDO: usar hora de Bogotá
+    solicitud.fecha_gestion = ahora_bogota()
     db.session.commit()
 
     _notificar_resultado(solicitud)
@@ -239,7 +245,8 @@ def rechazar(solicitud_id):
     solicitud.estado = 'rechazada'
     solicitud.motivo_rechazo = motivo_rechazo
     solicitud.operador_id = current_user.id
-    solicitud.fecha_gestion = datetime.utcnow()
+    # ✅ CORREGIDO: usar hora de Bogotá
+    solicitud.fecha_gestion = ahora_bogota()
     db.session.commit()
 
     _notificar_resultado(solicitud)
@@ -271,15 +278,14 @@ def devolucion(solicitud_id):
             flash('Selecciona el estado del recurso al momento de la devolución.', 'danger')
             return render_template('prestamos/devolucion_form.html', solicitud=solicitud)
 
-        solicitud.fecha_devolucion_real = datetime.utcnow()
+        # ✅ CORREGIDO: usar hora de Bogotá
+        solicitud.fecha_devolucion_real = ahora_bogota()
         solicitud.estado_devolucion = estado_devolucion
         solicitud.novedad_devolucion = novedad if novedad else None
         solicitud.estado = 'devuelta'
 
-        # HU-22: Calcular tiempo de uso automáticamente
         solicitud.calcular_tiempo_uso()
 
-        # Actualizar disponibilidad del recurso
         if solicitud.recurso:
             if estado_devolucion == 'bueno':
                 solicitud.recurso.cantidad_disponible += 1
@@ -323,7 +329,7 @@ def _notificar_nueva_solicitud(solicitud):
         )
         mail.send(msg)
     except Exception:
-        pass  # El correo es opcional, no bloquea el flujo
+        pass
 
 
 def _notificar_resultado(solicitud):
