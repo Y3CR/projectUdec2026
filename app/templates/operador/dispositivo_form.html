@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ accion }} Dispositivo RFID — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('operador.dispositivos') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-wifi me-2 text-ucundi"></i>{{ accion }} Dispositivo RFID
+            </h2>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small">Nombre *</label>
+                            <input type="text" class="form-control" name="nombre"
+                                value="{{ dispositivo.nombre if dispositivo else data.get('nombre', '') }}"
+                                placeholder="Ej: Lector Laboratorio Sistemas" required>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Código *</label>
+                            <input type="text" class="form-control" name="codigo"
+                                value="{{ dispositivo.codigo if dispositivo else data.get('codigo', '') }}"
+                                placeholder="Ej: RFID-01" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Espacio asociado</label>
+                            <select class="form-select" name="espacio_id">
+                                <option value="">— Sin espacio específico —</option>
+                                {% for e in espacios %}
+                                <option value="{{ e.id }}"
+                                    {% if dispositivo and dispositivo.espacio_id == e.id %}selected
+                                    {% elif data.get('espacio_id') and data.get('espacio_id')|int == e.id %}selected
+                                    {% endif %}>
+                                    {{ e.nombre }} ({{ e.codigo }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Descripción</label>
+                            <input type="text" class="form-control" name="descripcion"
+                                value="{{ dispositivo.descripcion if dispositivo else data.get('descripcion', '') }}"
+                                placeholder="Ej: Lector instalado en la puerta principal">
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="activo" name="activo"
+                                    {% if dispositivo %}{% if dispositivo.activo %}checked{% endif %}
+                                    {% else %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold small" for="activo">
+                                    Dispositivo activo
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+                    <hr class="my-4">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-ucundi px-4">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {% if accion == 'Registrar' %}Registrar{% else %}Guardar cambios{% endif %}
+                        </button>
+                        <a href="{{ url_for('operador.dispositivos') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Horario Global — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('operador.dashboard') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-clock me-2 text-ucundi"></i>Horario Global de Acceso
+            </h2>
+        </div>
+
+        <div class="alert alert-info small">
+            <i class="bi bi-info-circle me-2"></i>
+            Este horario aplica a <strong>todos los dispositivos RFID</strong> del sistema.
+            Si un permiso individual tiene su propio horario, ese tendrá prioridad.
+            Fuera de este horario, <strong>nadie</strong> podrá acceder aunque tenga permiso asignado.
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-3">
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Hora de inicio *</label>
+                            <input type="time" class="form-control" name="hora_inicio"
+                                value="{{ horario.hora_inicio if horario else '05:00' }}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Hora de fin *</label>
+                            <input type="time" class="form-control" name="hora_fin"
+                                value="{{ horario.hora_fin if horario else '22:00' }}" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small">Descripción</label>
+                            <input type="text" class="form-control" name="descripcion"
+                                value="{{ horario.descripcion if horario else '' }}"
+                                placeholder="Ej: Horario general UCundinamarca">
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="activo" name="activo"
+                                    {% if horario and horario.activo %}checked{% elif not horario %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold small" for="activo">
+                                    Horario global activo
+                                </label>
+                            </div>
+                            <div class="form-text text-warning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Si desactivas el horario global, los accesos solo se validarán
+                                contra el horario propio de cada permiso.
+                            </div>
+                        </div>
+
+                    </div>
+                    <hr class="my-4">
+                    <button type="submit" class="btn btn-ucundi px-4">
+                        <i class="bi bi-check-lg me-1"></i>Guardar horario
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {% if horario %}
+        <div class="card border-0 shadow-sm mt-3 bg-light">
+            <div class="card-body py-3 small">
+                <strong>Configuración actual:</strong>
+                {{ horario.hora_inicio }} — {{ horario.hora_fin }}
+                <span class="ms-2 badge {% if horario.activo %}bg-success{% else %}bg-danger{% endif %}">
+                    {% if horario.activo %}Activo{% else %}Inactivo{% endif %}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

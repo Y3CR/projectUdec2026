@@ -254,6 +254,37 @@ def rechazar(solicitud_id):
     return redirect(url_for('prestamos.gestionar'))
 
 
+@bp.route('/cancelar/<int:solicitud_id>', methods=['POST'])
+@login_required
+@operador_required
+def cancelar(solicitud_id):
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+
+    if solicitud.estado not in ['pendiente', 'aprobada']:
+        flash('Solo se pueden cancelar solicitudes pendientes o aprobadas.', 'warning')
+        return redirect(url_for('prestamos.gestionar'))
+
+    motivo = request.form.get('motivo_cancelacion', '').strip()
+    if not motivo:
+        flash('Debes indicar el motivo de la cancelación.', 'danger')
+        return redirect(url_for('prestamos.gestionar'))
+
+    # Si estaba aprobada y era un recurso, devolver la unidad
+    if solicitud.estado == 'aprobada' and solicitud.tipo == 'recurso' and solicitud.recurso:
+        solicitud.recurso.cantidad_disponible += 1
+        if solicitud.recurso.cantidad_disponible > 0:
+            solicitud.recurso.estado = 'disponible'
+
+    solicitud.estado = 'rechazada'
+    solicitud.motivo_rechazo = f'[CANCELADA] {motivo}'
+    solicitud.operador_id = current_user.id
+    solicitud.fecha_gestion = ahora_bogota()
+    db.session.commit()
+
+    flash(f'Solicitud #{solicitud.id} cancelada correctamente.', 'info')
+    return redirect(url_for('prestamos.gestionar'))
+
+
 # ── HU-15: Registrar devolución ────────────────────────────────────────────────
 
 @bp.route('/devolucion/<int:solicitud_id>', methods=['GET', 'POST'])

@@ -110,15 +110,60 @@
                         <i class="bi bi-speedometer2 me-1"></i>Panel
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('operador.espacios') }}">
-                        <i class="bi bi-door-open me-1"></i>Espacios
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-box-seam me-1"></i>Inventario
                     </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.espacios') }}">
+                                <i class="bi bi-door-open me-1"></i>Espacios
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.recursos') }}">
+                                <i class="bi bi-laptop me-1"></i>Recursos
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('operador.recursos') }}">
-                        <i class="bi bi-laptop me-1"></i>Recursos
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-shield-lock me-1"></i>Control RFID
                     </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.dispositivos') }}">
+                                <i class="bi bi-wifi me-1"></i>Dispositivos RFID
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.permisos') }}">
+                                <i class="bi bi-key me-1"></i>Permisos de acceso
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('operador.horario_global') }}">
+                                <i class="bi bi-clock me-1"></i>Horario global
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('accesos.dashboard') }}">
+                                <i class="bi bi-speedometer2 me-1"></i>Dashboard accesos
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('accesos.registros') }}">
+                                <i class="bi bi-list-ul me-1"></i>Registros
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="{{ url_for('accesos.alertas') }}">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Alertas
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('prestamos.gestionar') }}">
@@ -142,31 +187,7 @@
                         </li>
                     </ul>
                 </li>
-
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="bi bi-shield-lock me-1"></i>Accesos RFID
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="{{ url_for('accesos.dashboard') }}">
-                                <i class="bi bi-speedometer2 me-1"></i>Dashboard accesos
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{{ url_for('accesos.registros') }}">
-                                <i class="bi bi-list-ul me-1"></i>Todos los registros
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item text-danger" href="{{ url_for('accesos.alertas') }}">
-                                <i class="bi bi-exclamation-triangle me-1"></i>Alertas
-                            </a>
-                        </li>
-                    </ul>
-                </li>
                 {% endif %}
-
                 {% if current_user.get_role_name() in ['docente', 'estudiante', 'invitado'] %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('prestamos.mis_solicitudes') }}">

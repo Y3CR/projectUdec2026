@@ -58,7 +58,7 @@ def create_app(config_class=Config):
 
 
 def _seed_data():
-    from app.models import User, Role, TipoEspacio, CategoriaRecurso
+    from app.models import User, Role, TipoEspacio, CategoriaRecurso, HorarioGlobal
 
     roles_data = [
         ('administrador', 'Administrador del sistema'),
@@ -97,3 +97,14 @@ def _seed_data():
         if not CategoriaRecurso.query.filter_by(nombre=c).first():
             db.session.add(CategoriaRecurso(nombre=c))
     db.session.commit()
+
+    # Horario global por defecto
+    if not HorarioGlobal.query.first():
+        db.session.add(HorarioGlobal(
+            hora_inicio='05:00',
+            hora_fin='22:00',
+            activo=True,
+            descripcion='Horario general de acceso a instalaciones UCundinamarca'
+        ))
+        db.session.commit()
+        print('✅ Horario global creado: 05:00 - 22:00')

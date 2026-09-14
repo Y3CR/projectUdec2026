@@ -11,57 +11,69 @@
             Bienvenido/a, <strong>{{ current_user.nombre }} {{ current_user.apellido }}</strong>
         </p>
     </div>
+    {% if horario %}
+    <div class="text-end">
+        <span class="badge {% if horario.activo %}bg-success{% else %}bg-secondary{% endif %} px-3 py-2">
+            <i class="bi bi-clock me-1"></i>
+            Horario global: {{ horario.hora_inicio }} — {{ horario.hora_fin }}
+        </span>
+    </div>
+    {% endif %}
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="card stat-card border-0 shadow-sm">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-primary-soft me-3">
                     <i class="bi bi-door-open text-primary fs-3"></i>
                 </div>
                 <div>
-                    <p class="text-muted small mb-0">Total espacios</p>
+                    <p class="text-muted small mb-0">Espacios</p>
                     <h3 class="fw-bold mb-0">{{ stats.total_espacios }}</h3>
+                    <small class="text-success">{{ stats.espacios_disponibles }} disponibles</small>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card border-0 shadow-sm">
-            <div class="card-body d-flex align-items-center">
-                <div class="stat-icon bg-success-soft me-3">
-                    <i class="bi bi-check-circle text-success fs-3"></i>
-                </div>
-                <div>
-                    <p class="text-muted small mb-0">Espacios disponibles</p>
-                    <h3 class="fw-bold mb-0">{{ stats.espacios_disponibles }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="card stat-card border-0 shadow-sm">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-warning-soft me-3">
                     <i class="bi bi-laptop text-warning fs-3"></i>
                 </div>
                 <div>
-                    <p class="text-muted small mb-0">Total recursos</p>
+                    <p class="text-muted small mb-0">Recursos</p>
                     <h3 class="fw-bold mb-0">{{ stats.total_recursos }}</h3>
+                    <small class="text-success">{{ stats.recursos_disponibles }} disponibles</small>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="card stat-card border-0 shadow-sm">
             <div class="card-body d-flex align-items-center">
                 <div class="stat-icon bg-success-soft me-3">
-                    <i class="bi bi-box-seam text-success fs-3"></i>
+                    <i class="bi bi-wifi text-success fs-3"></i>
                 </div>
                 <div>
-                    <p class="text-muted small mb-0">Recursos disponibles</p>
-                    <h3 class="fw-bold mb-0">{{ stats.recursos_disponibles }}</h3>
+                    <p class="text-muted small mb-0">Dispositivos RFID</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_dispositivos }}</h3>
+                    <small class="text-success">{{ stats.dispositivos_activos }} activos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center">
+                <div class="stat-icon bg-primary-soft me-3">
+                    <i class="bi bi-key text-primary fs-3"></i>
+                </div>
+                <div>
+                    <p class="text-muted small mb-0">Permisos</p>
+                    <h3 class="fw-bold mb-0">{{ stats.total_permisos }}</h3>
+                    <small class="text-success">{{ stats.permisos_activos }} activos</small>
                 </div>
             </div>
         </div>
@@ -69,21 +81,51 @@
 </div>
 
 <div class="row g-3">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <a href="{{ url_for('operador.espacios') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
             <div class="card-body text-center py-4">
                 <i class="bi bi-door-open fs-1 text-primary mb-2"></i>
                 <h6 class="fw-bold mb-1">Gestionar Espacios</h6>
-                <p class="text-muted small mb-0">Registrar, editar y eliminar salas, laboratorios y más</p>
             </div>
         </a>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <a href="{{ url_for('operador.recursos') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
             <div class="card-body text-center py-4">
                 <i class="bi bi-laptop fs-1 text-warning mb-2"></i>
                 <h6 class="fw-bold mb-1">Gestionar Recursos</h6>
-                <p class="text-muted small mb-0">Administrar equipos, materiales y recursos institucionales</p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('operador.dispositivos') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-wifi fs-1 text-success mb-2"></i>
+                <h6 class="fw-bold mb-1">Dispositivos RFID</h6>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('operador.permisos') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-key fs-1 text-info mb-2"></i>
+                <h6 class="fw-bold mb-1">Permisos de Acceso</h6>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('operador.horario_global') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-clock fs-1 text-secondary mb-2"></i>
+                <h6 class="fw-bold mb-1">Horario Global</h6>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4">
+        <a href="{{ url_for('prestamos.gestionar') }}" class="card card-hover border-0 shadow-sm text-decoration-none">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-clipboard-check fs-1 text-danger mb-2"></i>
+                <h6 class="fw-bold mb-1">Gestionar Solicitudes</h6>
             </div>
         </a>
     </div>

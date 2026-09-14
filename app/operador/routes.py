@@ -1,12 +1,12 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.operador import bp
-from app.models import Espacio, TipoEspacio, Recurso, CategoriaRecurso
+from app.models import (Espacio, TipoEspacio, Recurso, CategoriaRecurso,
+                        DispositivoRFID, PermisoAcceso, HorarioGlobal, User)
 
 
-# ── Decorador: operador o administrador ───────────────────────────────────────
 def operador_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -20,6 +20,7 @@ def operador_required(f):
 
 
 # ── Dashboard operador ─────────────────────────────────────────────────────────
+
 @bp.route('/dashboard')
 @login_required
 @operador_required
@@ -29,8 +30,13 @@ def dashboard():
         'espacios_disponibles': Espacio.query.filter_by(disponible=True).count(),
         'total_recursos': Recurso.query.count(),
         'recursos_disponibles': Recurso.query.filter_by(estado='disponible').count(),
+        'total_dispositivos': DispositivoRFID.query.count(),
+        'dispositivos_activos': DispositivoRFID.query.filter_by(activo=True).count(),
+        'total_permisos': PermisoAcceso.query.count(),
+        'permisos_activos': PermisoAcceso.query.filter_by(activo=True).count(),
     }
-    return render_template('operador/dashboard.html', stats=stats)
+    horario = HorarioGlobal.query.filter_by(activo=True).first()
+    return render_template('operador/dashboard.html', stats=stats, horario=horario)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -47,7 +53,6 @@ def espacios():
     disponible_filtro = request.args.get('disponible', '')
 
     query = Espacio.query.join(TipoEspacio)
-
     if busqueda:
         query = query.filter(
             (Espacio.nombre.ilike(f'%{busqueda}%')) |
@@ -66,10 +71,8 @@ def espacios():
     )
     tipos = TipoEspacio.query.all()
     return render_template('operador/espacios.html',
-                           espacios=espacios_paginados,
-                           tipos=tipos,
-                           busqueda=busqueda,
-                           tipo_filtro=tipo_filtro,
+                           espacios=espacios_paginados, tipos=tipos,
+                           busqueda=busqueda, tipo_filtro=tipo_filtro,
                            disponible_filtro=disponible_filtro)
 
 
@@ -78,7 +81,6 @@ def espacios():
 @operador_required
 def nuevo_espacio():
     tipos = TipoEspacio.query.all()
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         codigo = request.form.get('codigo', '').strip().upper()
@@ -100,11 +102,9 @@ def nuevo_espacio():
             return render_template('operador/espacio_form.html', tipos=tipos,
                                    accion='Registrar', data=request.form)
 
-        espacio = Espacio(
-            nombre=nombre, codigo=codigo, tipo_id=tipo_id,
-            capacidad=capacidad, ubicacion=ubicacion,
-            descripcion=descripcion, disponible=disponible
-        )
+        espacio = Espacio(nombre=nombre, codigo=codigo, tipo_id=tipo_id,
+                          capacidad=capacidad, ubicacion=ubicacion,
+                          descripcion=descripcion, disponible=disponible)
         db.session.add(espacio)
         db.session.commit()
         flash(f'Espacio "{nombre}" registrado exitosamente.', 'success')
@@ -120,7 +120,6 @@ def nuevo_espacio():
 def editar_espacio(espacio_id):
     espacio = Espacio.query.get_or_404(espacio_id)
     tipos = TipoEspacio.query.all()
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         codigo = request.form.get('codigo', '').strip().upper()
@@ -184,7 +183,6 @@ def recursos():
     estado_filtro = request.args.get('estado', '')
 
     query = Recurso.query.join(CategoriaRecurso)
-
     if busqueda:
         query = query.filter(
             (Recurso.nombre.ilike(f'%{busqueda}%')) |
@@ -201,12 +199,9 @@ def recursos():
     categorias = CategoriaRecurso.query.all()
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
     return render_template('operador/recursos.html',
-                           recursos=recursos_paginados,
-                           categorias=categorias,
-                           estados=estados,
-                           busqueda=busqueda,
-                           categoria_filtro=categoria_filtro,
-                           estado_filtro=estado_filtro)
+                           recursos=recursos_paginados, categorias=categorias,
+                           estados=estados, busqueda=busqueda,
+                           categoria_filtro=categoria_filtro, estado_filtro=estado_filtro)
 
 
 @bp.route('/recursos/nuevo', methods=['GET', 'POST'])
@@ -215,7 +210,6 @@ def recursos():
 def nuevo_recurso():
     categorias = CategoriaRecurso.query.all()
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         codigo = request.form.get('codigo', '').strip().upper()
@@ -225,7 +219,8 @@ def nuevo_recurso():
         cantidad_total = request.form.get('cantidad_total', 1, type=int)
         cantidad_disponible = request.form.get('cantidad_disponible', 1, type=int)
 
-        errores = _validar_recurso(nombre, codigo, categoria_id, cantidad_total, cantidad_disponible, estado, estados)
+        errores = _validar_recurso(nombre, codigo, categoria_id, cantidad_total,
+                                   cantidad_disponible, estado, estados)
         if errores:
             for e in errores:
                 flash(e, 'danger')
@@ -237,11 +232,10 @@ def nuevo_recurso():
             return render_template('operador/recurso_form.html', categorias=categorias,
                                    estados=estados, accion='Registrar', data=request.form)
 
-        recurso = Recurso(
-            nombre=nombre, codigo=codigo, categoria_id=categoria_id,
-            descripcion=descripcion, estado=estado,
-            cantidad_total=cantidad_total, cantidad_disponible=cantidad_disponible
-        )
+        recurso = Recurso(nombre=nombre, codigo=codigo, categoria_id=categoria_id,
+                          descripcion=descripcion, estado=estado,
+                          cantidad_total=cantidad_total,
+                          cantidad_disponible=cantidad_disponible)
         db.session.add(recurso)
         db.session.commit()
         flash(f'Recurso "{nombre}" registrado exitosamente.', 'success')
@@ -258,7 +252,6 @@ def editar_recurso(recurso_id):
     recurso = Recurso.query.get_or_404(recurso_id)
     categorias = CategoriaRecurso.query.all()
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         codigo = request.form.get('codigo', '').strip().upper()
@@ -268,18 +261,21 @@ def editar_recurso(recurso_id):
         cantidad_total = request.form.get('cantidad_total', 1, type=int)
         cantidad_disponible = request.form.get('cantidad_disponible', 1, type=int)
 
-        errores = _validar_recurso(nombre, codigo, categoria_id, cantidad_total, cantidad_disponible, estado, estados)
+        errores = _validar_recurso(nombre, codigo, categoria_id, cantidad_total,
+                                   cantidad_disponible, estado, estados)
         if errores:
             for e in errores:
                 flash(e, 'danger')
             return render_template('operador/recurso_form.html', categorias=categorias,
-                                   estados=estados, accion='Editar', data=request.form, recurso=recurso)
+                                   estados=estados, accion='Editar', data=request.form,
+                                   recurso=recurso)
 
         existente = Recurso.query.filter_by(codigo=codigo).first()
         if existente and existente.id != recurso_id:
             flash(f'Ya existe otro recurso con el código {codigo}.', 'danger')
             return render_template('operador/recurso_form.html', categorias=categorias,
-                                   estados=estados, accion='Editar', data=request.form, recurso=recurso)
+                                   estados=estados, accion='Editar', data=request.form,
+                                   recurso=recurso)
 
         recurso.nombre = nombre
         recurso.codigo = codigo
@@ -308,7 +304,281 @@ def eliminar_recurso(recurso_id):
     return redirect(url_for('operador.recursos'))
 
 
-# ── Helpers de validación ──────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════════
+# DISPOSITIVOS RFID
+# ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/dispositivos')
+@login_required
+@operador_required
+def dispositivos():
+    page = request.args.get('page', 1, type=int)
+    dispositivos_paginados = DispositivoRFID.query.order_by(
+        DispositivoRFID.fecha_creacion.desc()
+    ).paginate(page=page, per_page=10, error_out=False)
+    return render_template('operador/dispositivos.html',
+                           dispositivos=dispositivos_paginados)
+
+
+@bp.route('/dispositivos/nuevo', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def nuevo_dispositivo():
+    espacios = Espacio.query.all()
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        codigo = request.form.get('codigo', '').strip().upper()
+        espacio_id = request.form.get('espacio_id', type=int) or None
+        descripcion = request.form.get('descripcion', '').strip()
+        activo = request.form.get('activo') == 'on'
+
+        if not nombre or not codigo:
+            flash('Nombre y código son obligatorios.', 'danger')
+            return render_template('operador/dispositivo_form.html',
+                                   espacios=espacios, accion='Registrar', data=request.form)
+
+        if DispositivoRFID.query.filter_by(codigo=codigo).first():
+            flash(f'Ya existe un dispositivo con el código {codigo}.', 'danger')
+            return render_template('operador/dispositivo_form.html',
+                                   espacios=espacios, accion='Registrar', data=request.form)
+
+        dispositivo = DispositivoRFID(nombre=nombre, codigo=codigo,
+                                      espacio_id=espacio_id,
+                                      descripcion=descripcion, activo=activo)
+        db.session.add(dispositivo)
+        db.session.commit()
+        flash(f'Dispositivo "{nombre}" registrado exitosamente.', 'success')
+        return redirect(url_for('operador.dispositivos'))
+
+    return render_template('operador/dispositivo_form.html',
+                           espacios=espacios, accion='Registrar', data={})
+
+
+@bp.route('/dispositivos/<int:dispositivo_id>/editar', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def editar_dispositivo(dispositivo_id):
+    dispositivo = DispositivoRFID.query.get_or_404(dispositivo_id)
+    espacios = Espacio.query.all()
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        codigo = request.form.get('codigo', '').strip().upper()
+        espacio_id = request.form.get('espacio_id', type=int) or None
+        descripcion = request.form.get('descripcion', '').strip()
+        activo = request.form.get('activo') == 'on'
+
+        if not nombre or not codigo:
+            flash('Nombre y código son obligatorios.', 'danger')
+            return render_template('operador/dispositivo_form.html',
+                                   espacios=espacios, accion='Editar',
+                                   data=request.form, dispositivo=dispositivo)
+
+        existente = DispositivoRFID.query.filter_by(codigo=codigo).first()
+        if existente and existente.id != dispositivo_id:
+            flash(f'Ya existe otro dispositivo con el código {codigo}.', 'danger')
+            return render_template('operador/dispositivo_form.html',
+                                   espacios=espacios, accion='Editar',
+                                   data=request.form, dispositivo=dispositivo)
+
+        dispositivo.nombre = nombre
+        dispositivo.codigo = codigo
+        dispositivo.espacio_id = espacio_id
+        dispositivo.descripcion = descripcion
+        dispositivo.activo = activo
+        db.session.commit()
+        flash('Dispositivo actualizado correctamente.', 'success')
+        return redirect(url_for('operador.dispositivos'))
+
+    return render_template('operador/dispositivo_form.html',
+                           espacios=espacios, accion='Editar',
+                           data={}, dispositivo=dispositivo)
+
+
+@bp.route('/dispositivos/<int:dispositivo_id>/eliminar', methods=['POST'])
+@login_required
+@operador_required
+def eliminar_dispositivo(dispositivo_id):
+    dispositivo = DispositivoRFID.query.get_or_404(dispositivo_id)
+    nombre = dispositivo.nombre
+    db.session.delete(dispositivo)
+    db.session.commit()
+    flash(f'Dispositivo "{nombre}" eliminado.', 'success')
+    return redirect(url_for('operador.dispositivos'))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# PERMISOS DE ACCESO
+# ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/permisos')
+@login_required
+@operador_required
+def permisos():
+    page = request.args.get('page', 1, type=int)
+    dispositivo_filtro = request.args.get('dispositivo_id', 0, type=int)
+    query = PermisoAcceso.query
+    if dispositivo_filtro:
+        query = query.filter_by(dispositivo_id=dispositivo_filtro)
+    permisos_paginados = query.order_by(
+        PermisoAcceso.fecha_creacion.desc()
+    ).paginate(page=page, per_page=10, error_out=False)
+    dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
+    return render_template('operador/permisos.html',
+                           permisos=permisos_paginados,
+                           dispositivos=dispositivos,
+                           dispositivo_filtro=dispositivo_filtro)
+
+
+@bp.route('/permisos/nuevo', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def nuevo_permiso():
+    dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
+    usuarios = User.query.filter_by(activo=True).order_by(User.nombre).all()
+
+    if request.method == 'POST':
+        usuario_id = request.form.get('usuario_id', type=int)
+        dispositivo_id = request.form.get('dispositivo_id', type=int)
+        uid_tarjeta = request.form.get('uid_tarjeta', '').strip().upper()
+        hora_inicio = request.form.get('hora_inicio', '').strip() or None
+        hora_fin = request.form.get('hora_fin', '').strip() or None
+        activo = request.form.get('activo') == 'on'
+
+        errores = []
+        if not usuario_id:
+            errores.append('Debes seleccionar un usuario.')
+        if not dispositivo_id:
+            errores.append('Debes seleccionar un dispositivo.')
+        if not uid_tarjeta:
+            errores.append('El UID de la tarjeta es obligatorio.')
+        if hora_inicio and hora_fin and hora_inicio >= hora_fin:
+            errores.append('La hora de fin debe ser posterior a la de inicio.')
+
+        if errores:
+            for e in errores:
+                flash(e, 'danger')
+            return render_template('operador/permiso_form.html',
+                                   dispositivos=dispositivos, usuarios=usuarios,
+                                   accion='Registrar', data=request.form)
+
+        # Verificar que no exista ya ese permiso
+        existente = PermisoAcceso.query.filter_by(
+            uid_tarjeta=uid_tarjeta,
+            dispositivo_id=dispositivo_id
+        ).first()
+        if existente:
+            flash('Ya existe un permiso para esa tarjeta en ese dispositivo.', 'danger')
+            return render_template('operador/permiso_form.html',
+                                   dispositivos=dispositivos, usuarios=usuarios,
+                                   accion='Registrar', data=request.form)
+
+        permiso = PermisoAcceso(
+            usuario_id=usuario_id,
+            dispositivo_id=dispositivo_id,
+            uid_tarjeta=uid_tarjeta,
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+            activo=activo
+        )
+        db.session.add(permiso)
+        db.session.commit()
+        flash('Permiso de acceso registrado correctamente.', 'success')
+        return redirect(url_for('operador.permisos'))
+
+    return render_template('operador/permiso_form.html',
+                           dispositivos=dispositivos, usuarios=usuarios,
+                           accion='Registrar', data={})
+
+
+@bp.route('/permisos/<int:permiso_id>/editar', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def editar_permiso(permiso_id):
+    permiso = PermisoAcceso.query.get_or_404(permiso_id)
+    dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
+    usuarios = User.query.filter_by(activo=True).order_by(User.nombre).all()
+
+    if request.method == 'POST':
+        usuario_id = request.form.get('usuario_id', type=int)
+        dispositivo_id = request.form.get('dispositivo_id', type=int)
+        uid_tarjeta = request.form.get('uid_tarjeta', '').strip().upper()
+        hora_inicio = request.form.get('hora_inicio', '').strip() or None
+        hora_fin = request.form.get('hora_fin', '').strip() or None
+        activo = request.form.get('activo') == 'on'
+
+        if not usuario_id or not dispositivo_id or not uid_tarjeta:
+            flash('Usuario, dispositivo y UID son obligatorios.', 'danger')
+            return render_template('operador/permiso_form.html',
+                                   dispositivos=dispositivos, usuarios=usuarios,
+                                   accion='Editar', data=request.form, permiso=permiso)
+
+        permiso.usuario_id = usuario_id
+        permiso.dispositivo_id = dispositivo_id
+        permiso.uid_tarjeta = uid_tarjeta
+        permiso.hora_inicio = hora_inicio
+        permiso.hora_fin = hora_fin
+        permiso.activo = activo
+        db.session.commit()
+        flash('Permiso actualizado correctamente.', 'success')
+        return redirect(url_for('operador.permisos'))
+
+    return render_template('operador/permiso_form.html',
+                           dispositivos=dispositivos, usuarios=usuarios,
+                           accion='Editar', data={}, permiso=permiso)
+
+
+@bp.route('/permisos/<int:permiso_id>/eliminar', methods=['POST'])
+@login_required
+@operador_required
+def eliminar_permiso(permiso_id):
+    permiso = PermisoAcceso.query.get_or_404(permiso_id)
+    db.session.delete(permiso)
+    db.session.commit()
+    flash('Permiso eliminado correctamente.', 'success')
+    return redirect(url_for('operador.permisos'))
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# HORARIO GLOBAL
+# ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/horario', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def horario_global():
+    horario = HorarioGlobal.query.first()
+    if request.method == 'POST':
+        hora_inicio = request.form.get('hora_inicio', '').strip()
+        hora_fin = request.form.get('hora_fin', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        activo = request.form.get('activo') == 'on'
+
+        if not hora_inicio or not hora_fin:
+            flash('Hora de inicio y fin son obligatorias.', 'danger')
+            return render_template('operador/horario_global.html', horario=horario)
+
+        if hora_inicio >= hora_fin:
+            flash('La hora de fin debe ser posterior a la de inicio.', 'danger')
+            return render_template('operador/horario_global.html', horario=horario)
+
+        if horario:
+            horario.hora_inicio = hora_inicio
+            horario.hora_fin = hora_fin
+            horario.descripcion = descripcion
+            horario.activo = activo
+        else:
+            horario = HorarioGlobal(hora_inicio=hora_inicio, hora_fin=hora_fin,
+                                    descripcion=descripcion, activo=activo)
+            db.session.add(horario)
+
+        db.session.commit()
+        flash('Horario global actualizado correctamente.', 'success')
+        return redirect(url_for('operador.horario_global'))
+
+    return render_template('operador/horario_global.html', horario=horario)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _validar_espacio(nombre, codigo, tipo_id, capacidad):
     errores = []
@@ -323,7 +593,8 @@ def _validar_espacio(nombre, codigo, tipo_id, capacidad):
     return errores
 
 
-def _validar_recurso(nombre, codigo, categoria_id, cantidad_total, cantidad_disponible, estado, estados_validos):
+def _validar_recurso(nombre, codigo, categoria_id, cantidad_total,
+                     cantidad_disponible, estado, estados_validos):
     errores = []
     if not nombre:
         errores.append('El nombre del recurso es obligatorio.')
