@@ -78,7 +78,7 @@
                             {% else %}
                                 {{ s.get_item_nombre() }}
                                 {% if s.fecha_inicio %}
-                                <br><span class="text-muted">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }} → {{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') }}</span>
+                                <br><span class="text-muted">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M')  if s.fecha_inicio else '—' }} → {{ s.fecha_fin.strftime('%d/%m/%Y %H:%M')  if s.fecha_fin else '—' }}</span>
                                 {% endif %}
                             {% endif %}
                         </td>

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Asignar Tarjetas RFID — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-credit-card-2-front me-2 text-ucundi"></i>Asignar Tarjetas RFID
+        </h2>
+        <p class="text-muted small mb-0">Gestiona el UID de tarjeta física de cada usuario</p>
+    </div>
+</div>
+
+<!-- Búsqueda y paginación -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
+            <input type="text" class="form-control form-control-sm w-auto" name="q"
+                placeholder="Buscar usuario..." value="{{ busqueda }}">
+            <button class="btn btn-outline-secondary btn-sm" type="submit">
+                <i class="bi bi-search"></i>
+            </button>
+            {% if busqueda %}
+            <a href="{{ url_for('operador.usuarios_tarjetas') }}" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x"></i>
+            </a>
+            {% endif %}
+            <div class="d-flex align-items-center gap-1 ms-auto">
+                <label class="small text-muted mb-0">Mostrar:</label>
+                {% for n in [15, 30, 50] %}
+                <a href="{{ url_for('operador.usuarios_tarjetas', q=busqueda, per_page=n) }}"
+                   class="btn btn-sm {% if per_page == n %}btn-ucundi{% else %}btn-outline-secondary{% endif %}">
+                    {{ n }}
+                </a>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Usuario</th>
+                        <th>Rol</th>
+                        <th class="text-center">Tarjeta RFID</th>
+                        <th class="text-center">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios.items %}
+                    <tr>
+                        <td class="ps-3">
+                            <strong>{{ u.nombre }} {{ u.apellido }}</strong>
+                            <br><span class="text-muted small">{{ u.email }}</span>
+                        </td>
+                        <td>
+                            <span class="badge
+                                {% if u.get_role_name() == 'docente' %}bg-primary
+                                {% elif u.get_role_name() == 'estudiante' %}bg-success
+                                {% elif u.get_role_name() == 'operador' %}bg-warning text-dark
+                                {% else %}bg-secondary{% endif %}">
+                                {{ u.get_role_name() | capitalize }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if u.uid_tarjeta %}
+                            <code class="text-success">{{ u.uid_tarjeta }}</code>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                Sin tarjeta
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('operador.asignar_tarjeta', user_id=u.id) }}"
+                               class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-credit-card-2-front me-1"></i>
+                                {% if u.uid_tarjeta %}Cambiar{% else %}Asignar{% endif %}
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                            No se encontraron usuarios.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if usuarios.pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if not usuarios.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('operador.usuarios_tarjetas', page=usuarios.prev_num, q=busqueda, per_page=per_page) }}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% for p in usuarios.iter_pages() %}
+            {% if p %}
+            <li class="page-item {% if p == usuarios.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('operador.usuarios_tarjetas', page=p, q=busqueda, per_page=per_page) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not usuarios.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('operador.usuarios_tarjetas', page=usuarios.next_num, q=busqueda, per_page=per_page) }}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

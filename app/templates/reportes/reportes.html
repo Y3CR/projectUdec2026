@@ -146,8 +146,8 @@
                             {% endif %}
                         </td>
                         <td><strong>{{ s.get_item_nombre() }}</strong></td>
-                        <td class="small">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td class="small">{{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="small">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') if s.fecha_inicio else '—' }}</td>
+                        <td class="small">{{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') if s.fecha_fin else '—' }}</td>
                         <td class="text-center">
                             {% if s.estado == 'pendiente' %}
                             <span class="badge bg-secondary">Pendiente</span>

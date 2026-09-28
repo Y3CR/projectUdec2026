@@ -624,6 +624,72 @@ def horario_global():
 
     return render_template('operador/horario_global.html', horario=horario)
 
+# ════════════════════════════════════════════════════════════════════════════════
+# ASIGNAR TARJETA RFID A USUARIOS
+# ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/usuarios')
+@login_required
+@operador_required
+def usuarios_tarjetas():
+    """Lista de usuarios para asignar tarjetas RFID."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 15, type=int)
+    if per_page not in [15, 30, 50]:
+        per_page = 15
+    busqueda = request.args.get('q', '')
+
+    query = User.query.filter(
+        User.role.has(db.or_(
+            User.role_id == r.id for r in []
+        ))
+    )
+    # Traer todos los usuarios activos excepto admin
+    query = User.query.filter_by(activo=True).filter(
+        ~User.role.has(name='administrador')
+    )
+    if busqueda:
+        query = query.filter(
+            (User.nombre.ilike(f'%{busqueda}%')) |
+            (User.apellido.ilike(f'%{busqueda}%')) |
+            (User.email.ilike(f'%{busqueda}%'))
+        )
+
+    usuarios_paginados = query.order_by(User.nombre).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    return render_template('operador/usuarios_tarjetas.html',
+                           usuarios=usuarios_paginados,
+                           busqueda=busqueda,
+                           per_page=per_page)
+
+
+@bp.route('/usuarios/<int:user_id>/tarjeta', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def asignar_tarjeta(user_id):
+    """El operador asigna o actualiza el UID de la tarjeta RFID de un usuario."""
+    usuario = User.query.get_or_404(user_id)
+
+    if request.method == 'POST':
+        uid = request.form.get('uid_tarjeta', '').strip().upper()
+
+        if uid:
+            existente = User.query.filter_by(uid_tarjeta=uid).first()
+            if existente and existente.id != user_id:
+                flash(f'El UID {uid} ya está asignado a {existente.nombre} {existente.apellido}.', 'danger')
+                return render_template('admin/asignar_tarjeta.html', usuario=usuario)
+            usuario.uid_tarjeta = uid
+            flash(f'Tarjeta {uid} asignada correctamente a {usuario.nombre} {usuario.apellido}.', 'success')
+        else:
+            usuario.uid_tarjeta = None
+            flash(f'Tarjeta removida para {usuario.nombre} {usuario.apellido}.', 'info')
+
+        db.session.commit()
+        return redirect(url_for('operador.usuarios_tarjetas'))
+
+    return render_template('admin/asignar_tarjeta.html', usuario=usuario)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -13,37 +13,12 @@
             </h2>
         </div>
 
-        {% if not current_user.tiene_tarjeta() %}
-        <!-- Sin tarjeta asignada -->
-        <div class="card border-0 shadow-sm border-warning">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-credit-card-2-front fs-1 text-warning mb-3 d-block"></i>
-                <h5 class="fw-bold">No tienes una tarjeta RFID asignada</h5>
-                <p class="text-muted">
-                    Para poder solicitar acceso a espacios mediante RFID,
-                    necesitas una tarjeta física registrada en el sistema.
-                </p>
-                <div class="alert alert-warning d-inline-block px-4 py-2">
-                    <i class="bi bi-geo-alt me-2"></i>
-                    <strong>Acércate a administración y solicita tu tarjeta RFID.</strong>
-                    Una vez asignada, podrás hacer solicitudes de acceso.
-                </div>
-                <div class="mt-3">
-                    <a href="{{ url_for('prestamos.mis_solicitudes') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-1"></i>Volver
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        {% else %}
-        <!-- Con tarjeta asignada -->
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <form method="POST" novalidate>
+                <form method="POST" novalidate id="formSolicitud">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                    <!-- Tipo -->
+                    <!-- Tipo de solicitud -->
                     <div class="mb-4">
                         <label class="form-label fw-semibold small">Tipo de solicitud *</label>
                         <div class="d-flex gap-3">
@@ -70,11 +45,28 @@
 
                     <!-- SECCIÓN RFID -->
                     <div id="seccionRfid">
-                        <!-- Tarjeta del usuario (solo lectura) -->
+                        {% if not current_user.tiene_tarjeta() %}
+                        <!-- Sin tarjeta: aviso pero no bloquea todo el formulario -->
+                        <div class="card border-warning mb-3">
+                            <div class="card-body text-center py-4">
+                                <i class="bi bi-credit-card-2-front fs-2 text-warning mb-2 d-block"></i>
+                                <h6 class="fw-bold">No tienes una tarjeta RFID asignada</h6>
+                                <p class="text-muted small mb-2">
+                                    Para solicitar acceso a espacios mediante RFID necesitas
+                                    una tarjeta física registrada en el sistema.
+                                </p>
+                                <div class="alert alert-warning d-inline-block px-4 py-2 mb-0">
+                                    <i class="bi bi-geo-alt me-2"></i>
+                                    <strong>Acércate a administración y solicita tu tarjeta RFID.</strong>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Con tarjeta asignada -->
                         <div class="alert alert-success py-2 small mb-3">
                             <i class="bi bi-credit-card-2-front me-2"></i>
                             Tu tarjeta RFID: <code class="fw-bold">{{ current_user.uid_tarjeta }}</code>
-                            — Esta tarjeta se registrará automáticamente en los dispositivos seleccionados.
+                            — Se registrará automáticamente en los dispositivos seleccionados.
                         </div>
 
                         <div class="mb-3">
@@ -111,9 +103,10 @@
                             </div>
                             {% endif %}
                         </div>
+                        {% endif %}
                     </div>
 
-                    <!-- SECCIÓN RECURSO -->
+                    <!-- SECCIÓN RECURSO — siempre disponible -->
                     <div id="seccionRecurso" style="display:none;">
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">Recurso *</label>
@@ -145,7 +138,7 @@
                     <div class="mt-3 mb-3">
                         <label class="form-label fw-semibold small">Justificación</label>
                         <textarea class="form-control" name="motivo" rows="3"
-                            placeholder="Describe brevemente por qué necesitas este acceso...">{{ data.get('motivo', '') }}</textarea>
+                            placeholder="Describe brevemente por qué necesitas este acceso o recurso...">{{ data.get('motivo', '') }}</textarea>
                     </div>
 
                     <hr class="my-3">
@@ -160,7 +153,6 @@
                 </form>
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
