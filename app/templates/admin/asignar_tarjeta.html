@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Asignar Tarjeta RFID — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('admin.usuarios') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-credit-card-2-front me-2 text-ucundi"></i>Asignar Tarjeta RFID
+            </h2>
+        </div>
+
+        <!-- Info del usuario (solo lectura) -->
+        <div class="card border-0 shadow-sm mb-3 bg-light">
+            <div class="card-body py-3">
+                <div class="row g-1 small">
+                    <div class="col-4 text-muted fw-semibold">Nombre:</div>
+                    <div class="col-8">{{ usuario.nombre }} {{ usuario.apellido }}</div>
+                    <div class="col-4 text-muted fw-semibold">Correo:</div>
+                    <div class="col-8">{{ usuario.email }}</div>
+                    <div class="col-4 text-muted fw-semibold">Rol:</div>
+                    <div class="col-8">
+                        <span class="badge bg-secondary">{{ usuario.get_role_name() | capitalize }}</span>
+                    </div>
+                    <div class="col-4 text-muted fw-semibold">UID actual:</div>
+                    <div class="col-8">
+                        {% if usuario.uid_tarjeta %}
+                        <code class="text-success">{{ usuario.uid_tarjeta }}</code>
+                        {% else %}
+                        <span class="text-danger">Sin tarjeta asignada</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form method="POST" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">
+                            <i class="bi bi-wifi me-1"></i>UID de la tarjeta RFID
+                        </label>
+                        <input type="text"
+                               class="form-control font-monospace text-uppercase"
+                               name="uid_tarjeta"
+                               value="{{ usuario.uid_tarjeta or '' }}"
+                               placeholder="Ej: 01020304"
+                               oninput="this.value = this.value.toUpperCase()">
+                        <div class="form-text">
+                            Obtén el UID pasando la tarjeta por el lector RFID.
+                            Deja vacío para quitar la tarjeta asignada.
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info small py-2">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Solo administradores y operadores pueden modificar este campo.
+                        Los demás datos del usuario son de solo lectura aquí.
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-ucundi px-4">
+                            <i class="bi bi-check-lg me-1"></i>Guardar tarjeta
+                        </button>
+                        <a href="{{ url_for('admin.usuarios') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

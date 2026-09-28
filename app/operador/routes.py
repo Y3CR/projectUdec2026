@@ -415,18 +415,65 @@ def eliminar_dispositivo(dispositivo_id):
 @operador_required
 def permisos():
     page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 15, type=int)
+    if per_page not in [15, 30, 50]:
+        per_page = 15
     dispositivo_filtro = request.args.get('dispositivo_id', 0, type=int)
-    query = PermisoAcceso.query
+
+    # Obtener UIDs únicos con paginación
+    query = db.session.query(
+        PermisoAcceso.uid_tarjeta,
+        PermisoAcceso.usuario_id
+    ).distinct()
+
     if dispositivo_filtro:
-        query = query.filter_by(dispositivo_id=dispositivo_filtro)
-    permisos_paginados = query.order_by(
-        PermisoAcceso.fecha_creacion.desc()
-    ).paginate(page=page, per_page=10, error_out=False)
+        query = query.filter(PermisoAcceso.dispositivo_id == dispositivo_filtro)
+
+    total_uids = query.count()
+    uids_pagina = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    # Para cada UID obtener todos sus permisos agrupados
+    class GrupoPermiso:
+        def __init__(self, usuario, uid_tarjeta, permisos):
+            self.usuario = usuario
+            self.uid_tarjeta = uid_tarjeta
+            self.permisos = permisos
+
+    grupos = []
+    for uid_tarjeta, usuario_id in uids_pagina:
+        usuario = User.query.get(usuario_id)
+        q = PermisoAcceso.query.filter_by(uid_tarjeta=uid_tarjeta, usuario_id=usuario_id)
+        if dispositivo_filtro:
+            q = q.filter_by(dispositivo_id=dispositivo_filtro)
+        perms = q.all()
+        grupos.append(GrupoPermiso(usuario, uid_tarjeta, perms))
+
+    # Objeto de paginación manual
+    import math
+    class PageInfo:
+        def __init__(self, page, per_page, total):
+            self.page = page
+            self.per_page = per_page
+            self.total = total
+            self.pages = math.ceil(total / per_page) if total else 1
+            self.has_prev = page > 1
+            self.has_next = page < self.pages
+            self.prev_num = page - 1
+            self.next_num = page + 1
+
+        def iter_pages(self):
+            for p in range(1, self.pages + 1):
+                yield p
+
+    page_info = PageInfo(page, per_page, total_uids)
     dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
+
     return render_template('operador/permisos.html',
-                           permisos=permisos_paginados,
+                           grupos=grupos,
+                           page_info=page_info,
                            dispositivos=dispositivos,
-                           dispositivo_filtro=dispositivo_filtro)
+                           dispositivo_filtro=dispositivo_filtro,
+                           per_page=per_page)
 
 
 @bp.route('/permisos/nuevo', methods=['GET', 'POST'])

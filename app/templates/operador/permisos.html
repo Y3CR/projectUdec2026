@@ -7,17 +7,17 @@
         <h2 class="fw-bold mb-0">
             <i class="bi bi-key me-2 text-ucundi"></i>Permisos de Acceso
         </h2>
-        <p class="text-muted small mb-0">Asigna qué tarjeta accede a qué dispositivo y en qué horario</p>
+        <p class="text-muted small mb-0">Un registro por usuario con todos sus dispositivos agrupados</p>
     </div>
     <a href="{{ url_for('operador.nuevo_permiso') }}" class="btn btn-ucundi">
         <i class="bi bi-plus-lg me-1"></i>Nuevo permiso
     </a>
 </div>
 
-<!-- Filtro -->
+<!-- Filtro y paginación -->
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
-        <form method="GET" class="d-flex gap-2 align-items-center">
+        <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
             <select class="form-select form-select-sm w-auto" name="dispositivo_id" onchange="this.form.submit()">
                 <option value="0">Todos los dispositivos</option>
                 {% for d in dispositivos %}
@@ -26,6 +26,15 @@
                 </option>
                 {% endfor %}
             </select>
+            <div class="d-flex align-items-center gap-1 ms-auto">
+                <label class="small text-muted mb-0">Mostrar:</label>
+                {% for n in [15, 30, 50] %}
+                <a href="{{ url_for('operador.permisos', dispositivo_id=dispositivo_filtro, per_page=n) }}"
+                   class="btn btn-sm {% if per_page == n %}btn-ucundi{% else %}btn-outline-secondary{% endif %}">
+                    {{ n }}
+                </a>
+                {% endfor %}
+            </div>
         </form>
     </div>
 </div>
@@ -38,68 +47,50 @@
                     <tr>
                         <th class="ps-3">Usuario</th>
                         <th>UID Tarjeta</th>
-                        <th>Dispositivo</th>
-                        <th>Espacio</th>
-                        <th class="text-center">Horario propio</th>
-                        <th class="text-center">Estado</th>
+                        <th>Dispositivos con acceso</th>
                         <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for p in permisos.items %}
+                    {% for grupo in grupos %}
                     <tr>
                         <td class="ps-3">
-                            <strong>{{ p.usuario.nombre }} {{ p.usuario.apellido }}</strong>
-                            <br><span class="badge
-                                {% if p.usuario.get_role_name() == 'docente' %}bg-primary
-                                {% elif p.usuario.get_role_name() == 'estudiante' %}bg-success
+                            <strong>{{ grupo.usuario.nombre }} {{ grupo.usuario.apellido }}</strong>
+                            <br>
+                            <span class="badge
+                                {% if grupo.usuario.get_role_name() == 'docente' %}bg-primary
+                                {% elif grupo.usuario.get_role_name() == 'estudiante' %}bg-success
                                 {% else %}bg-secondary{% endif %} small">
-                                {{ p.usuario.get_role_name() | capitalize }}
+                                {{ grupo.usuario.get_role_name() | capitalize }}
                             </span>
                         </td>
-                        <td><code>{{ p.uid_tarjeta }}</code></td>
+                        <td><code>{{ grupo.uid_tarjeta }}</code></td>
                         <td>
-                            <strong>{{ p.dispositivo.nombre }}</strong>
-                            <br><span class="text-muted small">{{ p.dispositivo.codigo }}</span>
-                        </td>
-                        <td class="text-muted small">
-                            {{ p.dispositivo.espacio.nombre if p.dispositivo.espacio else '—' }}
-                        </td>
-                        <td class="text-center small">
-                            {% if p.hora_inicio and p.hora_fin %}
-                            <span class="badge bg-info text-dark">
-                                {{ p.hora_inicio }} — {{ p.hora_fin }}
+                            {% for p in grupo.permisos %}
+                            <span class="badge {% if p.activo %}bg-dark{% else %}bg-secondary opacity-50{% endif %} me-1 mb-1"
+                                  title="{{ p.dispositivo.nombre }}{% if p.hora_inicio %} | {{ p.hora_inicio }}-{{ p.hora_fin }}{% endif %}">
+                                {{ p.dispositivo.codigo }}
+                                {% if not p.activo %}<s>{% endif %}
+                                {% if p.hora_inicio %}
+                                <small>{{ p.hora_inicio[:5] }}-{{ p.hora_fin[:5] }}</small>
+                                {% endif %}
+                                {% if not p.activo %}</s>{% endif %}
                             </span>
-                            {% else %}
-                            <span class="text-muted">Usa horario global</span>
-                            {% endif %}
+                            {% endfor %}
                         </td>
                         <td class="text-center">
-                            {% if p.activo %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
-                            {% else %}
-                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
+                            {% for p in grupo.permisos %}
                             <a href="{{ url_for('operador.editar_permiso', permiso_id=p.id) }}"
-                               class="btn btn-sm btn-outline-primary me-1">
-                                <i class="bi bi-pencil"></i>
+                               class="btn btn-sm btn-outline-primary me-1 mb-1"
+                               title="Editar permiso {{ p.dispositivo.codigo }}">
+                                <i class="bi bi-pencil"></i> {{ p.dispositivo.codigo }}
                             </a>
-                            <form method="POST"
-                                  action="{{ url_for('operador.eliminar_permiso', permiso_id=p.id) }}"
-                                  class="d-inline"
-                                  onsubmit="return confirm('¿Eliminar este permiso?')">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
+                            {% endfor %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">
+                        <td colspan="4" class="text-center py-4 text-muted">
                             <i class="bi bi-key fs-3 d-block mb-2"></i>
                             No hay permisos registrados.
                         </td>
@@ -111,23 +102,25 @@
     </div>
 </div>
 
-{% if permisos.pages > 1 %}
+{% if page_info.pages > 1 %}
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
-        <li class="page-item {% if not permisos.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('operador.permisos', page=permisos.prev_num, dispositivo_id=dispositivo_filtro) }}">
+        <li class="page-item {% if not page_info.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('operador.permisos', page=page_info.prev_num, dispositivo_id=dispositivo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
-        {% for pg in permisos.iter_pages() %}
-            {% if pg %}
-            <li class="page-item {% if pg == permisos.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('operador.permisos', page=pg, dispositivo_id=dispositivo_filtro) }}">{{ pg }}</a>
+        {% for p in page_info.iter_pages() %}
+            {% if p %}
+            <li class="page-item {% if p == page_info.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('operador.permisos', page=p, dispositivo_id=dispositivo_filtro, per_page=per_page) }}">{{ p }}</a>
             </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
         {% endfor %}
-        <li class="page-item {% if not permisos.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('operador.permisos', page=permisos.next_num, dispositivo_id=dispositivo_filtro) }}">
+        <li class="page-item {% if not page_info.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('operador.permisos', page=page_info.next_num, dispositivo_id=dispositivo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>

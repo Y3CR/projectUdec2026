@@ -8,97 +8,147 @@
             <a href="{{ url_for('prestamos.mis_solicitudes') }}" class="btn btn-outline-secondary btn-sm me-3">
                 <i class="bi bi-arrow-left"></i>
             </a>
-            <div>
-                <h2 class="fw-bold mb-0">
-                    <i class="bi bi-plus-circle me-2 text-ucundi"></i>Nueva Solicitud
-                </h2>
-               <!--   <p class="text-muted small mb-0">HU-9 / HU-10: Solicitar préstamo de espacio o recurso</p>-->
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-plus-circle me-2 text-ucundi"></i>Nueva Solicitud
+            </h2>
+        </div>
+
+        {% if not current_user.tiene_tarjeta() %}
+        <!-- Sin tarjeta asignada -->
+        <div class="card border-0 shadow-sm border-warning">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-credit-card-2-front fs-1 text-warning mb-3 d-block"></i>
+                <h5 class="fw-bold">No tienes una tarjeta RFID asignada</h5>
+                <p class="text-muted">
+                    Para poder solicitar acceso a espacios mediante RFID,
+                    necesitas una tarjeta física registrada en el sistema.
+                </p>
+                <div class="alert alert-warning d-inline-block px-4 py-2">
+                    <i class="bi bi-geo-alt me-2"></i>
+                    <strong>Acércate a administración y solicita tu tarjeta RFID.</strong>
+                    Una vez asignada, podrás hacer solicitudes de acceso.
+                </div>
+                <div class="mt-3">
+                    <a href="{{ url_for('prestamos.mis_solicitudes') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Volver
+                    </a>
+                </div>
             </div>
         </div>
 
+        {% else %}
+        <!-- Con tarjeta asignada -->
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <form method="POST" novalidate id="formSolicitud">
+                <form method="POST" novalidate>
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                    <div class="row g-3">
-
-                        <!-- Tipo -->
-                        <div class="col-12">
-                            <label class="form-label fw-semibold small">Tipo de solicitud *</label>
-                            <div class="d-flex gap-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tipo"
-                                        id="tipoEspacio" value="espacio"
-                                        {% if data.get('tipo') == 'espacio' %}checked{% endif %}
-                                        onchange="toggleTipo()">
-                                    <label class="form-check-label" for="tipoEspacio">
-                                        <i class="bi bi-door-open me-1"></i>Espacio físico
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tipo"
-                                        id="tipoRecurso" value="recurso"
-                                        {% if data.get('tipo') == 'recurso' %}checked{% endif %}
-                                        onchange="toggleTipo()">
-                                    <label class="form-check-label" for="tipoRecurso">
-                                        <i class="bi bi-laptop me-1"></i>Recurso físico
-                                    </label>
-                                </div>
+                    <!-- Tipo -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold small">Tipo de solicitud *</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo"
+                                    id="tipoRfid" value="rfid"
+                                    {% if data.get('tipo') != 'recurso' %}checked{% endif %}
+                                    onchange="toggleTipo()">
+                                <label class="form-check-label" for="tipoRfid">
+                                    <i class="bi bi-wifi me-1 text-ucundi"></i>Acceso RFID a espacio
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo"
+                                    id="tipoRecurso" value="recurso"
+                                    {% if data.get('tipo') == 'recurso' %}checked{% endif %}
+                                    onchange="toggleTipo()">
+                                <label class="form-check-label" for="tipoRecurso">
+                                    <i class="bi bi-laptop me-1 text-warning"></i>Recurso físico
+                                </label>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Selector espacio -->
-                        <div class="col-12" id="selectorEspacio" style="display:none;">
-                            <label class="form-label fw-semibold small">Espacio *</label>
-                            <select class="form-select" name="espacio_id">
-                                <option value="">— Selecciona un espacio —</option>
-                                {% for espacio in espacios %}
-                                <option value="{{ espacio.id }}"
-                                    {% if data.get('espacio_id') and data.get('espacio_id')|int == espacio.id %}selected{% endif %}>
-                                    {{ espacio.nombre }} ({{ espacio.tipo.nombre }}) — Cap: {{ espacio.capacidad }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                    <!-- SECCIÓN RFID -->
+                    <div id="seccionRfid">
+                        <!-- Tarjeta del usuario (solo lectura) -->
+                        <div class="alert alert-success py-2 small mb-3">
+                            <i class="bi bi-credit-card-2-front me-2"></i>
+                            Tu tarjeta RFID: <code class="fw-bold">{{ current_user.uid_tarjeta }}</code>
+                            — Esta tarjeta se registrará automáticamente en los dispositivos seleccionados.
                         </div>
 
-                        <!-- Selector recurso -->
-                        <div class="col-12" id="selectorRecurso" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">
+                                Dispositivos RFID a los que solicitas acceso *
+                            </label>
+                            {% if dispositivos %}
+                            <div class="row g-2">
+                                {% for d in dispositivos %}
+                                <div class="col-md-6">
+                                    <div class="card border p-2 h-100">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                name="dispositivos_ids" value="{{ d.id }}"
+                                                id="disp_{{ d.id }}"
+                                                {% if data.get('dispositivos_ids') and d.id|string in data.getlist('dispositivos_ids') %}checked{% endif %}>
+                                            <label class="form-check-label w-100" for="disp_{{ d.id }}">
+                                                <div class="fw-semibold small">
+                                                    <i class="bi bi-wifi me-1 text-ucundi"></i>{{ d.nombre }}
+                                                </div>
+                                                <div class="text-muted" style="font-size:0.78rem;">
+                                                    <span class="badge bg-dark me-1">{{ d.codigo }}</span>
+                                                    {{ d.espacio.nombre if d.espacio else 'Sin espacio' }}
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning small py-2">
+                                No hay dispositivos RFID activos disponibles.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN RECURSO -->
+                    <div id="seccionRecurso" style="display:none;">
+                        <div class="mb-3">
                             <label class="form-label fw-semibold small">Recurso *</label>
                             <select class="form-select" name="recurso_id">
                                 <option value="">— Selecciona un recurso —</option>
-                                {% for recurso in recursos %}
-                                <option value="{{ recurso.id }}"
-                                    {% if data.get('recurso_id') and data.get('recurso_id')|int == recurso.id %}selected{% endif %}>
-                                    {{ recurso.nombre }} ({{ recurso.categoria.nombre }}) — Disponibles: {{ recurso.cantidad_disponible }}
+                                {% for r in recursos %}
+                                <option value="{{ r.id }}"
+                                    {% if data.get('recurso_id') and data.get('recurso_id')|int == r.id %}selected{% endif %}>
+                                    {{ r.nombre }} ({{ r.categoria.nombre }}) — Disponibles: {{ r.cantidad_disponible }}
                                 </option>
                                 {% endfor %}
                             </select>
                         </div>
-
-                        <!-- Fechas -->
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Fecha y hora de inicio *</label>
-                            <input type="datetime-local" class="form-control" name="fecha_inicio"
-                                value="{{ data.get('fecha_inicio', '') }}" required>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Fecha y hora de inicio *</label>
+                                <input type="datetime-local" class="form-control" name="fecha_inicio"
+                                    value="{{ data.get('fecha_inicio', '') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Fecha y hora de fin *</label>
+                                <input type="datetime-local" class="form-control" name="fecha_fin"
+                                    value="{{ data.get('fecha_fin', '') }}">
+                            </div>
                         </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Fecha y hora de fin *</label>
-                            <input type="datetime-local" class="form-control" name="fecha_fin"
-                                value="{{ data.get('fecha_fin', '') }}" required>
-                        </div>
-
-                        <!-- Motivo -->
-                        <div class="col-12">
-                            <label class="form-label fw-semibold small">Motivo o descripción del uso</label>
-                            <textarea class="form-control" name="motivo" rows="3"
-                                placeholder="Describe brevemente el uso que darás al espacio o recurso...">{{ data.get('motivo', '') }}</textarea>
-                        </div>
-
                     </div>
 
-                    <hr class="my-4">
+                    <!-- Motivo -->
+                    <div class="mt-3 mb-3">
+                        <label class="form-label fw-semibold small">Justificación</label>
+                        <textarea class="form-control" name="motivo" rows="3"
+                            placeholder="Describe brevemente por qué necesitas este acceso...">{{ data.get('motivo', '') }}</textarea>
+                    </div>
+
+                    <hr class="my-3">
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-ucundi px-4">
                             <i class="bi bi-send me-1"></i>Enviar solicitud
@@ -110,6 +160,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -117,11 +168,10 @@
 {% block scripts %}
 <script>
     function toggleTipo() {
-        const esEspacio = document.getElementById('tipoEspacio').checked;
-        document.getElementById('selectorEspacio').style.display = esEspacio ? 'block' : 'none';
-        document.getElementById('selectorRecurso').style.display = esEspacio ? 'none' : 'block';
+        const esRfid = document.getElementById('tipoRfid').checked;
+        document.getElementById('seccionRfid').style.display = esRfid ? 'block' : 'none';
+        document.getElementById('seccionRecurso').style.display = esRfid ? 'none' : 'block';
     }
-    // Inicializar al cargar
     toggleTipo();
 </script>
 {% endblock %}

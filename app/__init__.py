@@ -54,6 +54,14 @@ def create_app(config_class=Config):
         db.create_all()
         _seed_data()
 
+
+    # Filtro Jinja2 para obtener dispositivo por ID
+    from app.models import DispositivoRFID as _Disp
+    @app.template_filter('dispositivo')
+    def get_dispositivo(did):
+        return _Disp.query.get(did)
+    
+    
     return app
 
 

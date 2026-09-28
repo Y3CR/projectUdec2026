@@ -26,6 +26,8 @@ class User(UserMixin, db.Model):
     activo = db.Column(db.Boolean, default=True)
     intentos_fallidos = db.Column(db.Integer, default=0)
     bloqueado_hasta = db.Column(db.DateTime, nullable=True)
+    # UID de tarjeta RFID asignada físicamente por el operador
+    uid_tarjeta = db.Column(db.String(50), nullable=True, unique=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -63,6 +65,9 @@ class User(UserMixin, db.Model):
     def get_role_name(self):
         return self.role.name if self.role else 'sin_rol'
 
+    def tiene_tarjeta(self):
+        return bool(self.uid_tarjeta)
+
     def __repr__(self):
         return f'<User {self.email}>'
 
@@ -72,7 +77,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# ── Sprint 2: Espacios ─────────────────────────────────────────────────────────
+# ── Sprint 2: Tipos de espacio ─────────────────────────────────────────────────
 
 class TipoEspacio(db.Model):
     __tablename__ = 'tipos_espacio'
@@ -133,17 +138,19 @@ class Recurso(db.Model):
         return f'<Recurso {self.codigo}>'
 
 
-# ── Sprint 3: Solicitudes y préstamos ─────────────────────────────────────────
+# ── Sprint 3: Solicitudes ──────────────────────────────────────────────────────
 
 class Solicitud(db.Model):
     __tablename__ = 'solicitudes'
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)  # 'rfid' o 'recurso'
     espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
     recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=True)
-    fecha_inicio = db.Column(db.DateTime, nullable=False)
-    fecha_fin = db.Column(db.DateTime, nullable=False)
+    uid_tarjeta = db.Column(db.String(50), nullable=True)
+    dispositivos_solicitados = db.Column(db.Text, nullable=True)
+    fecha_inicio = db.Column(db.DateTime, nullable=True)
+    fecha_fin = db.Column(db.DateTime, nullable=True)
     motivo = db.Column(db.Text)
     estado = db.Column(db.String(20), default='pendiente')
     motivo_rechazo = db.Column(db.Text)
@@ -162,23 +169,32 @@ class Solicitud(db.Model):
             self.tiempo_uso_minutos = int(delta.total_seconds() / 60)
 
     def get_item_nombre(self):
-        if self.tipo == 'espacio' and self.espacio:
-            return self.espacio.nombre
+        if self.tipo == 'rfid':
+            return f'Acceso RFID — {self.uid_tarjeta or "sin UID"}'
         elif self.tipo == 'recurso' and self.recurso:
             return self.recurso.nombre
         return '—'
+
+    def get_dispositivos_ids(self):
+        import json
+        if self.dispositivos_solicitados:
+            try:
+                return json.loads(self.dispositivos_solicitados)
+            except Exception:
+                return []
+        return []
 
     def __repr__(self):
         return f'<Solicitud {self.id} - {self.estado}>'
 
 
-# ── Sprint 5 (nuevo): Dispositivos RFID ───────────────────────────────────────
+# ── Sprint 5: Dispositivos RFID ────────────────────────────────────────────────
 
 class DispositivoRFID(db.Model):
     __tablename__ = 'dispositivos_rfid'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
-    codigo = db.Column(db.String(50), unique=True, nullable=False)  # ej: RFID-01
+    codigo = db.Column(db.String(50), unique=True, nullable=False)
     espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
     descripcion = db.Column(db.String(200))
     activo = db.Column(db.Boolean, default=True)
@@ -190,19 +206,18 @@ class DispositivoRFID(db.Model):
         return f'<DispositivoRFID {self.codigo}>'
 
 
-# ── Sprint 5 (nuevo): Horario global del sistema ──────────────────────────────
+# ── Sprint 5: Horario global ───────────────────────────────────────────────────
 
 class HorarioGlobal(db.Model):
     __tablename__ = 'horario_global'
     id = db.Column(db.Integer, primary_key=True)
-    hora_inicio = db.Column(db.String(5), nullable=False, default='05:00')  # HH:MM
-    hora_fin = db.Column(db.String(5), nullable=False, default='22:00')     # HH:MM
+    hora_inicio = db.Column(db.String(5), nullable=False, default='05:00')
+    hora_fin = db.Column(db.String(5), nullable=False, default='22:00')
     activo = db.Column(db.Boolean, default=True)
     descripcion = db.Column(db.String(200))
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def en_horario_permitido(self, hora_actual):
-        """Verifica si la hora actual está dentro del horario permitido."""
         try:
             h_ini = [int(x) for x in self.hora_inicio.split(':')]
             h_fin = [int(x) for x in self.hora_fin.split(':')]
@@ -211,43 +226,36 @@ class HorarioGlobal(db.Model):
             t_actual = hora_actual.time() if hasattr(hora_actual, 'time') else hora_actual
             return t_ini <= t_actual <= t_fin
         except Exception:
-            return True  # Si hay error, no bloquear
+            return True
 
     def __repr__(self):
         return f'<HorarioGlobal {self.hora_inicio}-{self.hora_fin}>'
 
 
-# ── Sprint 5 (nuevo): Permisos de acceso por tarjeta y dispositivo ────────────
+# ── Sprint 5: Permisos de acceso ───────────────────────────────────────────────
 
 class PermisoAcceso(db.Model):
     __tablename__ = 'permisos_acceso'
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'), nullable=False)
-    uid_tarjeta = db.Column(db.String(50), nullable=False)  # UID de la tarjeta física asignada
-    hora_inicio = db.Column(db.String(5), nullable=True)    # HH:MM, None = usa horario global
-    hora_fin = db.Column(db.String(5), nullable=True)       # HH:MM, None = usa horario global
+    uid_tarjeta = db.Column(db.String(50), nullable=False)
+    hora_inicio = db.Column(db.String(5), nullable=True)
+    hora_fin = db.Column(db.String(5), nullable=True)
     activo = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
 
     def en_horario_permitido(self, hora_actual, horario_global=None):
-        """
-        Verifica si la hora actual está dentro del horario permitido.
-        Si el permiso tiene horario propio, lo usa. Si no, usa el global.
-        """
         try:
             t_actual = hora_actual.time() if hasattr(hora_actual, 'time') else hora_actual
-
             if self.hora_inicio and self.hora_fin:
                 h_ini = [int(x) for x in self.hora_inicio.split(':')]
                 h_fin = [int(x) for x in self.hora_fin.split(':')]
                 t_ini = time(h_ini[0], h_ini[1])
                 t_fin = time(h_fin[0], h_fin[1])
                 return t_ini <= t_actual <= t_fin
-
             if horario_global and horario_global.activo:
                 return horario_global.en_horario_permitido(hora_actual)
-
             return True
         except Exception:
             return True
@@ -256,7 +264,7 @@ class PermisoAcceso(db.Model):
         return f'<PermisoAcceso uid={self.uid_tarjeta} dispositivo={self.dispositivo_id}>'
 
 
-# ── Sprint 5: Registros de acceso RFID/QR ─────────────────────────────────────
+# ── Sprint 5: Registros de acceso ─────────────────────────────────────────────
 
 class RegistroAcceso(db.Model):
     __tablename__ = 'registros_acceso'

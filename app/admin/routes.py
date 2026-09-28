@@ -3,10 +3,9 @@ from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.admin import bp
-from app.models import User, Role
+from app.models import User, Role, TipoEspacio
 
 
-# ── Decorador: solo administradores ───────────────────────────────────────────
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -17,7 +16,8 @@ def admin_required(f):
     return decorated_function
 
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# ── Dashboard ──────────────────────────────────────────────────────────────────
+
 @bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -25,16 +25,24 @@ def dashboard():
         'total_usuarios': User.query.count(),
         'usuarios_activos': User.query.filter_by(activo=True).count(),
         'total_roles': Role.query.count(),
+        'sin_tarjeta': User.query.filter(
+            User.uid_tarjeta == None,
+            User.activo == True
+        ).count(),
     }
     return render_template('admin/dashboard.html', stats=stats)
 
 
-# ── Listado de usuarios (HU-2) ────────────────────────────────────────────────
+# ── Usuarios ───────────────────────────────────────────────────────────────────
+
 @bp.route('/usuarios')
 @login_required
 @admin_required
 def usuarios():
     page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 15, type=int)
+    if per_page not in [15, 30, 50]:
+        per_page = 15
     busqueda = request.args.get('q', '')
     query = User.query.join(Role)
     if busqueda:
@@ -44,18 +52,19 @@ def usuarios():
             (User.email.ilike(f'%{busqueda}%'))
         )
     usuarios_paginados = query.order_by(User.fecha_creacion.desc()).paginate(
-        page=page, per_page=10, error_out=False
+        page=page, per_page=per_page, error_out=False
     )
-    return render_template('admin/users.html', usuarios=usuarios_paginados, busqueda=busqueda)
+    return render_template('admin/users.html',
+                           usuarios=usuarios_paginados,
+                           busqueda=busqueda,
+                           per_page=per_page)
 
 
-# ── Crear usuario (HU-2) ───────────────────────────────────────────────────────
 @bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def nuevo_usuario():
     roles = Role.query.all()
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         apellido = request.form.get('apellido', '').strip()
@@ -65,43 +74,35 @@ def nuevo_usuario():
         activo = request.form.get('activo') == 'on'
 
         errores = _validar_usuario(nombre, apellido, email, password, role_id, roles)
-
         if errores:
             for e in errores:
                 flash(e, 'danger')
-            return render_template('admin/user_form.html', roles=roles, accion='Crear',
-                                   data=request.form)
+            return render_template('admin/user_form.html', roles=roles,
+                                   accion='Crear', data=request.form)
 
-        # Verificar email único
         if User.query.filter_by(email=email).first():
             flash('Ya existe un usuario con ese correo.', 'danger')
-            return render_template('admin/user_form.html', roles=roles, accion='Crear',
-                                   data=request.form)
+            return render_template('admin/user_form.html', roles=roles,
+                                   accion='Crear', data=request.form)
 
-        usuario = User(
-            nombre=nombre,
-            apellido=apellido,
-            email=email,
-            role_id=role_id,
-            activo=activo
-        )
+        usuario = User(nombre=nombre, apellido=apellido, email=email,
+                       role_id=role_id, activo=activo)
         usuario.set_password(password)
         db.session.add(usuario)
         db.session.commit()
         flash(f'Usuario {nombre} {apellido} creado exitosamente.', 'success')
         return redirect(url_for('admin.usuarios'))
 
-    return render_template('admin/user_form.html', roles=roles, accion='Crear', data={})
+    return render_template('admin/user_form.html', roles=roles,
+                           accion='Crear', data={})
 
 
-# ── Editar usuario (HU-2 y HU-3) ──────────────────────────────────────────────
 @bp.route('/usuarios/<int:user_id>/editar', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def editar_usuario(user_id):
     usuario = User.query.get_or_404(user_id)
     roles = Role.query.all()
-
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         apellido = request.form.get('apellido', '').strip()
@@ -110,20 +111,19 @@ def editar_usuario(user_id):
         activo = request.form.get('activo') == 'on'
         nueva_password = request.form.get('password', '').strip()
 
-        errores = _validar_usuario(nombre, apellido, email, None, role_id, roles,
-                                   es_edicion=True)
+        errores = _validar_usuario(nombre, apellido, email, None,
+                                   role_id, roles, es_edicion=True)
         if errores:
             for e in errores:
                 flash(e, 'danger')
-            return render_template('admin/user_form.html', roles=roles, accion='Editar',
-                                   data=request.form, usuario=usuario)
+            return render_template('admin/user_form.html', roles=roles,
+                                   accion='Editar', data=request.form, usuario=usuario)
 
-        # Verificar email único (excluyendo el usuario actual)
         existente = User.query.filter_by(email=email).first()
         if existente and existente.id != user_id:
             flash('Ya existe otro usuario con ese correo.', 'danger')
-            return render_template('admin/user_form.html', roles=roles, accion='Editar',
-                                   data=request.form, usuario=usuario)
+            return render_template('admin/user_form.html', roles=roles,
+                                   accion='Editar', data=request.form, usuario=usuario)
 
         usuario.nombre = nombre
         usuario.apellido = apellido
@@ -136,11 +136,10 @@ def editar_usuario(user_id):
         flash('Usuario actualizado correctamente.', 'success')
         return redirect(url_for('admin.usuarios'))
 
-    return render_template('admin/user_form.html', roles=roles, accion='Editar',
-                           data={}, usuario=usuario)
+    return render_template('admin/user_form.html', roles=roles,
+                           accion='Editar', data={}, usuario=usuario)
 
 
-# ── Eliminar usuario ───────────────────────────────────────────────────────────
 @bp.route('/usuarios/<int:user_id>/eliminar', methods=['POST'])
 @login_required
 @admin_required
@@ -156,7 +155,39 @@ def eliminar_usuario(user_id):
     return redirect(url_for('admin.usuarios'))
 
 
-# ── Gestión de roles (HU-3) ───────────────────────────────────────────────────
+# ── Asignar UID de tarjeta (solo operador/admin) ───────────────────────────────
+
+@bp.route('/usuarios/<int:user_id>/tarjeta', methods=['GET', 'POST'])
+@login_required
+def asignar_tarjeta(user_id):
+    if current_user.get_role_name() not in ['administrador', 'operador']:
+        flash('Acceso denegado.', 'danger')
+        return redirect(url_for('admin.dashboard'))
+
+    usuario = User.query.get_or_404(user_id)
+
+    if request.method == 'POST':
+        uid = request.form.get('uid_tarjeta', '').strip().upper()
+
+        if uid:
+            # Verificar que no esté asignado a otro usuario
+            existente = User.query.filter_by(uid_tarjeta=uid).first()
+            if existente and existente.id != user_id:
+                flash(f'El UID {uid} ya está asignado a {existente.nombre} {existente.apellido}.', 'danger')
+                return render_template('admin/asignar_tarjeta.html', usuario=usuario)
+            usuario.uid_tarjeta = uid
+        else:
+            usuario.uid_tarjeta = None
+
+        db.session.commit()
+        flash(f'Tarjeta RFID actualizada para {usuario.nombre} {usuario.apellido}.', 'success')
+        return redirect(url_for('admin.usuarios'))
+
+    return render_template('admin/asignar_tarjeta.html', usuario=usuario)
+
+
+# ── Roles ──────────────────────────────────────────────────────────────────────
+
 @bp.route('/roles')
 @login_required
 @admin_required
@@ -165,12 +196,53 @@ def roles():
     return render_template('admin/roles.html', roles=todos_roles)
 
 
-# ── Helper de validación ───────────────────────────────────────────────────────
-def _validar_usuario(nombre, apellido, email, password, role_id, roles_disponibles,
-                     es_edicion=False):
+# ── Tipos de espacio ───────────────────────────────────────────────────────────
+
+@bp.route('/tipos-espacio')
+@login_required
+@admin_required
+def tipos_espacio():
+    tipos = TipoEspacio.query.order_by(TipoEspacio.nombre).all()
+    return render_template('admin/tipos_espacio.html', tipos=tipos)
+
+
+@bp.route('/tipos-espacio/nuevo', methods=['POST'])
+@login_required
+@admin_required
+def nuevo_tipo_espacio():
+    nombre = request.form.get('nombre', '').strip()
+    if not nombre:
+        flash('El nombre es obligatorio.', 'danger')
+        return redirect(url_for('admin.tipos_espacio'))
+    if TipoEspacio.query.filter_by(nombre=nombre).first():
+        flash(f'Ya existe un tipo de espacio con ese nombre.', 'danger')
+        return redirect(url_for('admin.tipos_espacio'))
+    db.session.add(TipoEspacio(nombre=nombre))
+    db.session.commit()
+    flash(f'Tipo "{nombre}" creado correctamente.', 'success')
+    return redirect(url_for('admin.tipos_espacio'))
+
+
+@bp.route('/tipos-espacio/<int:tipo_id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_tipo_espacio(tipo_id):
+    tipo = TipoEspacio.query.get_or_404(tipo_id)
+    if tipo.espacios.count() > 0:
+        flash(f'No puedes eliminar "{tipo.nombre}" porque tiene espacios asociados.', 'danger')
+        return redirect(url_for('admin.tipos_espacio'))
+    db.session.delete(tipo)
+    db.session.commit()
+    flash(f'Tipo "{tipo.nombre}" eliminado.', 'success')
+    return redirect(url_for('admin.tipos_espacio'))
+
+
+# ── Helper validación ──────────────────────────────────────────────────────────
+
+def _validar_usuario(nombre, apellido, email, password, role_id,
+                     roles_disponibles, es_edicion=False):
     errores = []
     allowed_domain = current_app.config['ALLOWED_EMAIL_DOMAIN']
-
     if not nombre:
         errores.append('El nombre es obligatorio.')
     if not apellido:
@@ -179,24 +251,17 @@ def _validar_usuario(nombre, apellido, email, password, role_id, roles_disponibl
         errores.append('El correo es obligatorio.')
     elif '@' not in email:
         errores.append('El correo no tiene un formato válido.')
-
     if not role_id:
         errores.append('Debes seleccionar un rol.')
     else:
         role = next((r for r in roles_disponibles if r.id == role_id), None)
-        if role is None:
-            errores.append('El rol seleccionado no es válido.')
-        elif role.name in ['administrador', 'docente', 'estudiante', 'operador']:
-            # HU-2 escenario 3: validar dominio institucional
+        if role and role.name in ['administrador', 'docente', 'estudiante', 'operador']:
             if email and not email.endswith(f'@{allowed_domain}'):
                 errores.append(
-                    f'Los usuarios con rol "{role.name}" deben usar un correo '
-                    f'con dominio @{allowed_domain}.'
+                    f'Los usuarios con rol "{role.name}" deben usar @{allowed_domain}.'
                 )
-
     if not es_edicion and not password:
         errores.append('La contraseña es obligatoria para nuevos usuarios.')
     elif not es_edicion and password and len(password) < 8:
         errores.append('La contraseña debe tener al menos 8 caracteres.')
-
     return errores

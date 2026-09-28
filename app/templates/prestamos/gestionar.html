@@ -3,20 +3,17 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0">
-            <i class="bi bi-clipboard-check me-2 text-ucundi"></i>Gestionar Solicitudes
-        </h2>
-        <!--  <p class="text-muted small mb-0">HU-11: Aprobar, rechazar y registrar devoluciones</p> -->
-    </div>
+    <h2 class="fw-bold mb-0">
+        <i class="bi bi-clipboard-check me-2 text-ucundi"></i>Gestionar Solicitudes
+    </h2>
 </div>
 
-<!-- Filtros -->
+<!-- Filtros y paginación -->
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
-        <form method="GET" class="d-flex gap-2 flex-wrap align-items-center">
+        <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
             <select class="form-select form-select-sm w-auto" name="estado" onchange="this.form.submit()">
-                <option value="">Todos los estados</option>
+                <option value="">Todos</option>
                 <option value="pendiente" {% if estado_filtro == 'pendiente' %}selected{% endif %}>Pendiente</option>
                 <option value="aprobada" {% if estado_filtro == 'aprobada' %}selected{% endif %}>Aprobada</option>
                 <option value="rechazada" {% if estado_filtro == 'rechazada' %}selected{% endif %}>Rechazada</option>
@@ -24,9 +21,18 @@
             </select>
             <select class="form-select form-select-sm w-auto" name="tipo" onchange="this.form.submit()">
                 <option value="">Todos los tipos</option>
-                <option value="espacio" {% if tipo_filtro == 'espacio' %}selected{% endif %}>Espacio</option>
+                <option value="rfid" {% if tipo_filtro == 'rfid' %}selected{% endif %}>RFID</option>
                 <option value="recurso" {% if tipo_filtro == 'recurso' %}selected{% endif %}>Recurso</option>
             </select>
+            <div class="d-flex align-items-center gap-1 ms-auto">
+                <label class="small text-muted mb-0">Mostrar:</label>
+                {% for n in [15, 30, 50] %}
+                <a href="{{ url_for('prestamos.gestionar', estado=estado_filtro, tipo=tipo_filtro, per_page=n) }}"
+                   class="btn btn-sm {% if per_page == n %}btn-ucundi{% else %}btn-outline-secondary{% endif %}">
+                    {{ n }}
+                </a>
+                {% endfor %}
+            </div>
         </form>
     </div>
 </div>
@@ -40,9 +46,8 @@
                         <th class="ps-3">#</th>
                         <th>Usuario</th>
                         <th>Tipo</th>
-                        <th>Item</th>
-                        <th>Fecha inicio</th>
-                        <th>Fecha fin</th>
+                        <th>Detalle</th>
+                        <th>Dispositivos / Recurso</th>
                         <th class="text-center">Estado</th>
                         <th class="text-center">Acciones</th>
                     </tr>
@@ -56,60 +61,42 @@
                             <br><span class="text-muted small">{{ s.usuario.get_role_name() | capitalize }}</span>
                         </td>
                         <td>
-                            {% if s.tipo == 'espacio' %}
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Espacio</span>
+                            {% if s.tipo == 'rfid' %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="bi bi-wifi me-1"></i>RFID
+                            </span>
                             {% else %}
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Recurso</span>
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                                <i class="bi bi-laptop me-1"></i>Recurso
+                            </span>
                             {% endif %}
                         </td>
-                        <td><strong>{{ s.get_item_nombre() }}</strong></td>
-                        <td class="small">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td class="small">{{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="small">
+                            {% if s.tipo == 'rfid' %}
+                                Tarjeta: <code>{{ s.uid_tarjeta or '—' }}</code>
+                                {% if s.motivo %}<br><span class="text-muted">{{ s.motivo[:50] }}</span>{% endif %}
+                            {% else %}
+                                {{ s.get_item_nombre() }}
+                                {% if s.fecha_inicio %}
+                                <br><span class="text-muted">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }} → {{ s.fecha_fin.strftime('%d/%m/%Y %H:%M') }}</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            {% if s.tipo == 'rfid' %}
+                                {% for did in s.get_dispositivos_ids() %}
+                                    {% set d = did | dispositivo %}
+                                    <span class="badge bg-dark me-1 mb-1">
+                                        {{ d.codigo if d else did }}
+                                        {% if d and d.espacio %}<br><small>{{ d.espacio.nombre }}</small>{% endif %}
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                {{ s.recurso.nombre if s.recurso else '—' }}
+                            {% endif %}
+                        </td>
                         <td class="text-center">
                             {% if s.estado == 'pendiente' %}
-
-                            <!-- Aprobar -->
-                            <form method="POST" action="{{ url_for('prestamos.aprobar', solicitud_id=s.id) }}"
-                                class="d-inline"
-                                onsubmit="return confirm('¿Aprobar solicitud #{{ s.id }}?')">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-success me-1" title="Aprobar">
-                                    <i class="bi bi-check-lg"></i>
-                                </button>
-                            </form>
-                            <!-- Rechazar con modal -->
-                            <button type="button" class="btn btn-sm btn-danger me-1"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalRechazo{{ s.id }}"
-                                    title="Rechazar">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                            <!-- Modal rechazo -->
-                            <div class="modal fade" id="modalRechazo{{ s.id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Rechazar solicitud #{{ s.id }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form method="POST" action="{{ url_for('prestamos.rechazar', solicitud_id=s.id) }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <div class="modal-body">
-                                                <label class="form-label fw-semibold small">Motivo del rechazo *</label>
-                                                <textarea class="form-control" name="motivo_rechazo" rows="3"
-                                                    placeholder="Explica el motivo del rechazo..." required></textarea>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-danger btn-sm">Confirmar rechazo</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-
-
-
                             <span class="badge bg-secondary">Pendiente</span>
                             {% elif s.estado == 'aprobada' %}
                             <span class="badge bg-success">Aprobada</span>
@@ -121,23 +108,17 @@
                         </td>
                         <td class="text-center">
                             {% if s.estado == 'pendiente' %}
-                            <!-- Aprobar -->
                             <form method="POST" action="{{ url_for('prestamos.aprobar', solicitud_id=s.id) }}"
-                                  class="d-inline"
-                                  onsubmit="return confirm('¿Aprobar solicitud #{{ s.id }}?')">
+                                  class="d-inline" onsubmit="return confirm('¿Aprobar solicitud #{{ s.id }}?')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-success me-1" title="Aprobar">
                                     <i class="bi bi-check-lg"></i>
                                 </button>
                             </form>
-                            <!-- Rechazar con modal -->
                             <button type="button" class="btn btn-sm btn-danger"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalRechazo{{ s.id }}"
-                                    title="Rechazar">
+                                    data-bs-toggle="modal" data-bs-target="#modalRechazo{{ s.id }}">
                                 <i class="bi bi-x-lg"></i>
                             </button>
-
                             <!-- Modal rechazo -->
                             <div class="modal fade" id="modalRechazo{{ s.id }}" tabindex="-1">
                                 <div class="modal-dialog">
@@ -149,24 +130,57 @@
                                         <form method="POST" action="{{ url_for('prestamos.rechazar', solicitud_id=s.id) }}">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <div class="modal-body">
-                                                <label class="form-label fw-semibold small">Motivo del rechazo *</label>
                                                 <textarea class="form-control" name="motivo_rechazo" rows="3"
-                                                    placeholder="Explica el motivo del rechazo..." required></textarea>
+                                                    placeholder="Motivo del rechazo..." required></textarea>
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-danger btn-sm">Confirmar rechazo</button>
+                                                <button type="submit" class="btn btn-danger btn-sm">Rechazar</button>
                                             </div>
                                         </form>
                                     </div>
                                 </div>
                             </div>
 
-                            {% elif s.estado == 'aprobada' and s.tipo == 'recurso' %}
+                            {% elif s.estado == 'aprobada' %}
+                            {% if s.tipo == 'recurso' %}
                             <a href="{{ url_for('prestamos.devolucion', solicitud_id=s.id) }}"
-                               class="btn btn-sm btn-outline-info" title="Registrar devolución">
-                                <i class="bi bi-arrow-return-left me-1"></i>Devolución
+                               class="btn btn-sm btn-outline-info me-1">
+                                <i class="bi bi-arrow-return-left"></i>
                             </a>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-warning"
+                                    data-bs-toggle="modal" data-bs-target="#modalCancelar{{ s.id }}">
+                                <i class="bi bi-slash-circle"></i>
+                            </button>
+                            <!-- Modal cancelar -->
+                            <div class="modal fade" id="modalCancelar{{ s.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title text-warning">Cancelar solicitud #{{ s.id }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('prestamos.cancelar', solicitud_id=s.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <div class="modal-body">
+                                                {% if s.tipo == 'rfid' %}
+                                                <div class="alert alert-warning small py-2">
+                                                    Al cancelar se desactivarán los permisos RFID creados.
+                                                </div>
+                                                {% endif %}
+                                                <textarea class="form-control" name="motivo_cancelacion" rows="3"
+                                                    placeholder="Motivo de la cancelación..." required></textarea>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                                                <button type="submit" class="btn btn-warning btn-sm">Confirmar</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
                             {% else %}
                             <span class="text-muted small">—</span>
                             {% endif %}
@@ -174,7 +188,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">
+                        <td colspan="7" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox fs-3 d-block mb-2"></i>
                             No hay solicitudes con estos filtros.
                         </td>
@@ -190,25 +204,26 @@
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
         <li class="page-item {% if not solicitudes.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.prev_num, estado=estado_filtro, tipo=tipo_filtro) }}">
+            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.prev_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
         {% for p in solicitudes.iter_pages() %}
             {% if p %}
             <li class="page-item {% if p == solicitudes.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('prestamos.gestionar', page=p, estado=estado_filtro, tipo=tipo_filtro) }}">{{ p }}</a>
+                <a class="page-link" href="{{ url_for('prestamos.gestionar', page=p, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">{{ p }}</a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
         {% endfor %}
         <li class="page-item {% if not solicitudes.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.next_num, estado=estado_filtro, tipo=tipo_filtro) }}">
+            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.next_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
     </ul>
+    <p class="text-center text-muted small">{{ solicitudes.total }} solicitudes en total</p>
 </nav>
 {% endif %}
 {% endblock %}
