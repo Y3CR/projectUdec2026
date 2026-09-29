@@ -3,132 +3,219 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar sesión — UCundinamarca</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Iniciar sesión — Sistema de Préstamos · UCundinamarca</title>
+
+    <!-- Tipografías Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS vía CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand:        '#1b4332', /* Verde institucional */
+                        'brand-deep': '#122e24',
+                        'brand-ink':  '#0d241c',
+                        gold:         '#b8901f', /* Oro institucional */
+                        'gold-soft':  '#e9d8a6',
+                        cream:        '#f6f3ea',
+                        paper:        '#fbfaf5',
+                        ink:          '#14241d',
+                    },
+                    fontFamily: {
+                        display: ['Archivo', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        @keyframes glowPulse { 0%, 100% { opacity: .35; } 50% { opacity: .6; } }
+        .anim-rise   { animation: rise .5s cubic-bezier(.32,.72,0,1) both; }
+        .anim-rise-2 { animation: rise .6s cubic-bezier(.32,.72,0,1) .08s both; }
+        .anim-rise-3 { animation: rise .6s cubic-bezier(.32,.72,0,1) .16s both; }
+    </style>
 </head>
-<body class="bg-login d-flex align-items-center min-vh-100">
+<body class="min-h-screen bg-cream font-display text-ink antialiased relative overflow-x-hidden">
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5 col-lg-4">
+    <!-- Resplandores decorativos de fondo -->
+    <div class="pointer-events-none absolute -top-40 -left-40 size-[560px] rounded-full bg-gold-soft/50 blur-3xl" style="animation:glowPulse 8s ease-in-out infinite"></div>
+    <div class="pointer-events-none absolute -bottom-52 -right-32 size-[620px] rounded-full bg-brand/20 blur-3xl"></div>
 
-            <!-- Logo / Encabezado -->
-            <div class="text-center mb-4">
-                <div class="login-logo mb-3">
-                    <i class="bi bi-building text-white" style="font-size: 3rem;"></i>
+    <div class="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8">
+
+        <!-- ===== Encabezado ===== -->
+        <header class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+               
+                <img src="{{ url_for('static', filename='img/escudo.png') }}" alt="Escudo Universidad de Cundinamarca" class="size-11 object-contain"> 
+                              <div class="leading-tight">
+                    <p class="text-sm font-bold tracking-tight">Universidad de Cundinamarca</p>
+                    <p class="font-mono text-[10px] uppercase tracking-[0.2em] text-ink/45">Sistema de Préstamos</p>
                 </div>
-                <h4 class="text-white fw-bold">Sistema de Préstamos</h4>
-                <p class="text-white-50 small">Universidad de Cundinamarca</p>
             </div>
+            <p class="hidden font-mono text-[11px] uppercase tracking-[0.2em] text-ink/40 sm:block">UC · 2026</p>
+        </header>
 
-            <!-- Card de login -->
-            <div class="card shadow-lg border-0">
-                <div class="card-body p-4">
-                    <h5 class="card-title text-center mb-4 fw-semibold text-dark">
-                        <i class="bi bi-lock me-2 text-ucundi"></i>Iniciar sesión
-                    </h5>
+        <!-- ===== Contenido Principal ===== -->
+        <main class="grid flex-1 place-content-center gap-8 py-10 lg:grid-cols-[1.05fr_0.95fr]">
 
-                    <!-- Alertas flash (dentro del card) -->
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-sm py-2 small">
-                                {{ message }}
-                            </div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-
-
-                    {% if request.args.get('msg') == 'logout' %}
-                    <div class="alert alert-info alert-sm py-2 small">
-                        <i class="bi bi-check-circle me-1"></i>Has cerrado sesión correctamente.
+            <!-- Panel Institucional -->
+            <section class="relative flex flex-col justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand-deep via-brand to-brand-ink p-8 text-cream ring-1 ring-white/10 lg:p-12">
+                <div class="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-gold/25 blur-3xl"></div>
+                <div class="relative">
+                    <p class="anim-rise font-mono text-[11px] uppercase tracking-[0.3em] text-gold-soft">Sistema de Préstamos · U. de Cundinamarca Ext. Facatativa</p>
+                    <h1 class="anim-rise-2 mt-5 text-balance text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">Gestiona espacios, recursos y accesos desde un solo lugar</h1>
+                    <p class="anim-rise-3 mt-4 max-w-[34ch] text-pretty text-cream/70">Solicita acceso a laboratorios y salones, reserva equipos institucionales y controla el ingreso mediante tu tarjeta RFID con tu cuenta institucional.</p>
+                    <div class="anim-rise-3 mt-8 flex flex-wrap gap-3">
+                        <span class="rounded-full border border-gold/30 bg-gold/10 px-3 py-1 font-mono text-[11px] text-gold-soft">Control 24/7</span>
+                        <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] text-cream/70">Acceso a espacios</span>
+                        <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] text-cream/70">Prestamo de recursos</span>
                     </div>
+                </div>
+            </section>
+
+            <!-- Tarjeta de Formulario de Inicio de Sesión -->
+            <section class="rounded-3xl border border-brand/10 bg-white/55 p-8 shadow-xl shadow-brand/5 ring-1 ring-white/60 backdrop-blur-xl lg:p-10">
+                <h2 class="anim-rise text-2xl font-bold tracking-tight">Iniciar sesión</h2>
+                <p class="anim-rise mt-1 font-mono text-[11px] uppercase tracking-[0.15em] text-ink/45">Solo con tu correo institucional</p>
+
+                <!-- Mensajes Flash de Flask -->
+                {% set alert_styles = {
+                    'success': 'border-emerald-700/30 bg-emerald-700/10 text-emerald-800',
+                    'danger':  'border-red-600/30 bg-red-600/10 text-red-800',
+                    'error':   'border-red-600/30 bg-red-600/10 text-red-800',
+                    'warning': 'border-gold/40 bg-gold/10 text-yellow-800',
+                    'info':    'border-brand/20 bg-brand/10 text-brand-ink'
+                } %}
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="mt-6 flex items-center gap-3 rounded-xl border px-4 py-3 {{ alert_styles.get(category, alert_styles['info']) }}" role="alert">
+                                <span class="size-2 shrink-0 rounded-full bg-current"></span>
+                                <p class="text-sm font-medium">{{ message }}</p>
+                            </div>
+                        {% endfor %}
                     {% endif %}
+                {% endwith %}
 
-                    <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
-                        {{ form.hidden_tag() }}
+                <!-- Mensaje de logout -->
+                {% if request.args.get('msg') == 'logout' %}
+                    <div class="mt-6 flex items-center gap-3 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3" role="alert">
+                        <span class="size-2 shrink-0 rounded-full bg-gold"></span>
+                        <p class="text-sm font-medium text-brand-ink">Has cerrado sesión correctamente.</p>
+                    </div>
+                {% endif %}
 
-                        <!-- Correo -->
-                        <div class="mb-3">
-                            <label for="email" class="form-label fw-semibold small">
-                                <i class="bi bi-envelope me-1"></i>Correo institucional
-                            </label>
+                <form class="mt-6 space-y-5" method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+                    
+                    <!-- Campo: Correo institucional -->
+                    <div>
+                        <label for="email" class="text-sm font-semibold">Correo institucional</label>
+                        <p class="mt-1 font-mono text-[10px] text-ink/45 uppercase tracking-wide">
+                            Usa solo tu correo inst. @ucundinamarca.edu.co
+                        </p>
+                        <div class="mt-2 flex items-stretch overflow-hidden rounded-xl border border-brand/15 bg-cream/70 transition focus-within:border-gold/60 focus-within:ring-2 focus-within:ring-gold/20">
                             <input
-                                type="email"
-                                class="form-control {% if form.email.errors %}is-invalid{% endif %}"
                                 id="email"
                                 name="email"
-                                placeholder="usuario@ucundinamarca.edu.co"
+                                type="email"
+                                placeholder="ejemplo@ucundinamarca.edu.co"
+                                autocomplete="username"
                                 value="{{ form.email.data or '' }}"
                                 autofocus
+                                class="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-ink/35"
                             >
-                            {% for error in form.email.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                            {% endfor %}
                         </div>
+                        {% for error in form.email.errors %}
+                            <p class="mt-1 text-xs font-medium text-red-700">{{ error }}</p>
+                        {% endfor %}
+                    </div>
 
-                        <!-- Contraseña -->
-                        <div class="mb-3">
-                            <label for="password" class="form-label fw-semibold small">
-                                <i class="bi bi-key me-1"></i>Contraseña
-                            </label>
-                            <div class="input-group">
-                                <input
-                                    type="password"
-                                    class="form-control {% if form.password.errors %}is-invalid{% endif %}"
-                                    id="password"
-                                    name="password"
-                                    placeholder="••••••••"
-                                >
-                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                    <i class="bi bi-eye" id="eyeIcon"></i>
-                                </button>
-                                {% for error in form.password.errors %}
-                                <div class="invalid-feedback">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                        </div>
-
-                        <!-- Recordarme -->
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
-                            <label class="form-check-label small" for="remember_me">Recordarme</label>
-                        </div>
-
-                        <!-- Botón -->
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-ucundi btn-lg fw-semibold">
-                                <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
+                    <!-- Campo: Contraseña -->
+                    <div>
+                        <label for="password" class="text-sm font-semibold">Contraseña</label>
+                        <div class="mt-2 flex items-stretch overflow-hidden rounded-xl border border-brand/15 bg-cream/70 transition focus-within:border-gold/60 focus-within:ring-2 focus-within:ring-gold/20">
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                placeholder="••••••••"
+                                autocomplete="current-password"
+                                class="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm outline-none placeholder:text-ink/35"
+                            >
+                            <button type="button" id="togglePassword" aria-label="Mostrar contraseña"
+                                class="grid w-12 place-items-center text-ink/50 transition-colors hover:text-brand focus:outline-none">
+                                <svg id="eyeOpen" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <svg id="eyeClosed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden size-4">
+                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 11s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                                    <line x1="2" y1="2" x2="22" y2="22"/>
+                                </svg>
                             </button>
                         </div>
-                    </form>
-                </div>
-            </div>
+                        {% for error in form.password.errors %}
+                            <p class="mt-1 text-xs font-medium text-red-700">{{ error }}</p>
+                        {% endfor %}
+                    </div>
 
-            <p class="text-center text-white-50 small mt-3">
-                ¿Problemas para acceder? Contacta al administrador del sistema.
-            </p>
-        </div>
+                    <!-- Recordarme -->
+                    <div class="flex items-center justify-between">
+                        {% if form.remember_me is defined %}
+                            <label class="flex items-center gap-2 text-sm text-ink/70 cursor-pointer">
+                                {{ form.remember_me(class="size-4 rounded border-brand/30 accent-brand") }}
+                                Recordarme
+                            </label>
+                        {% else %}
+                            <label for="remember" class="flex items-center gap-2 text-sm text-ink/70 cursor-pointer">
+                                <input type="checkbox" name="remember" id="remember" class="size-4 rounded border-brand/30 accent-brand">
+                                Recordarme
+                            </label>
+                        {% endif %}
+                    </div>
+
+                    <!-- Botón Ingresar -->
+                    <button type="submit"
+                        class="group w-full rounded-xl bg-gradient-to-br from-brand to-brand-deep px-4 py-3 text-sm font-bold text-cream shadow-md shadow-brand/20 transition-all hover:shadow-lg hover:shadow-brand/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60">
+                        Ingresar
+                        <span class="ml-1 inline-block text-gold-soft transition-transform group-hover:translate-x-1">→</span>
+                    </button>
+                </form>
+            </section>
+        </main>
+
+        <!-- ===== Pie de página ===== -->
+        <footer class="flex flex-col items-center justify-between gap-2 border-t border-brand/10 pt-6 text-sm text-ink/55 sm:flex-row">
+            <p>¿Problemas para acceder? Contacta al administrador del sistema.</p>
+            <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-ink/40">UCundinamarca · Sistema de Préstamos</p>
+        </footer>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-<script>
-    // Toggle mostrar/ocultar contraseña
-    document.getElementById('togglePassword').addEventListener('click', function () {
+    <!-- Script de alternancia de contraseña -->
+    <script>
+        const toggleBtn = document.getElementById('togglePassword');
         const pwd = document.getElementById('password');
-        const icon = document.getElementById('eyeIcon');
-        if (pwd.type === 'password') {
-            pwd.type = 'text';
-            icon.classList.replace('bi-eye', 'bi-eye-slash');
-        } else {
-            pwd.type = 'password';
-            icon.classList.replace('bi-eye-slash', 'bi-eye');
-        }
-    });
-</script>
+        const eyeOpen = document.getElementById('eyeOpen');
+        const eyeClosed = document.getElementById('eyeClosed');
+
+        toggleBtn.addEventListener('click', function () {
+            const showing = pwd.type === 'text';
+            pwd.type = showing ? 'password' : 'text';
+            eyeOpen.classList.toggle('hidden', !showing);
+            eyeClosed.classList.toggle('hidden', showing);
+            toggleBtn.setAttribute('aria-label', showing ? 'Mostrar contraseña' : 'Ocultar contraseña');
+        });
+    </script>
 </body>
 </html>

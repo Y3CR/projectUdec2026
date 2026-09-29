@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.admin import bp
-from app.models import User, Role, TipoEspacio
+from app.models import User, Role, TipoEspacio, CategoriaRecurso
 
 
 def admin_required(f):
@@ -265,3 +265,44 @@ def _validar_usuario(nombre, apellido, email, password, role_id,
     elif not es_edicion and password and len(password) < 8:
         errores.append('La contraseña debe tener al menos 8 caracteres.')
     return errores
+
+
+# ── Categorías de recurso ──────────────────────────────────────────────────────
+
+@bp.route('/categorias-recurso')
+@login_required
+@admin_required
+def categorias_recurso():
+    categorias = CategoriaRecurso.query.order_by(CategoriaRecurso.nombre).all()
+    return render_template('admin/categorias_recurso.html', categorias=categorias)
+
+
+@bp.route('/categorias-recurso/nueva', methods=['POST'])
+@login_required
+@admin_required
+def nueva_categoria_recurso():
+    nombre = request.form.get('nombre', '').strip()
+    if not nombre:
+        flash('El nombre es obligatorio.', 'danger')
+        return redirect(url_for('admin.categorias_recurso'))
+    if CategoriaRecurso.query.filter_by(nombre=nombre).first():
+        flash('Ya existe una categoría con ese nombre.', 'danger')
+        return redirect(url_for('admin.categorias_recurso'))
+    db.session.add(CategoriaRecurso(nombre=nombre))
+    db.session.commit()
+    flash(f'Categoría "{nombre}" creada correctamente.', 'success')
+    return redirect(url_for('admin.categorias_recurso'))
+
+
+@bp.route('/categorias-recurso/<int:cat_id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_categoria_recurso(cat_id):
+    cat = CategoriaRecurso.query.get_or_404(cat_id)
+    if cat.recursos.count() > 0:
+        flash(f'No puedes eliminar "{cat.nombre}" porque tiene recursos asociados.', 'danger')
+        return redirect(url_for('admin.categorias_recurso'))
+    db.session.delete(cat)
+    db.session.commit()
+    flash(f'Categoría "{cat.nombre}" eliminada.', 'success')
+    return redirect(url_for('admin.categorias_recurso'))

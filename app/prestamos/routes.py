@@ -257,19 +257,17 @@ def aprobar(solicitud_id):
 
     elif solicitud.tipo == 'recurso':
         if solicitud.recurso:
-            if solicitud.recurso.cantidad_disponible <= 0:
-                flash('No se puede aprobar: recurso sin unidades disponibles.', 'danger')
+            if solicitud.recurso.estado != 'disponible':
+                flash('No se puede aprobar: el recurso no está disponible.', 'danger')
                 return redirect(url_for('prestamos.gestionar'))
-            solicitud.recurso.cantidad_disponible -= 1
-            if solicitud.recurso.cantidad_disponible == 0:
-                solicitud.recurso.estado = 'prestado'
+            solicitud.recurso.estado = 'prestado'
 
         solicitud.estado = 'aprobada'
         solicitud.operador_id = current_user.id
         solicitud.fecha_gestion = ahora_bogota()
         db.session.commit()
         _notificar_resultado(solicitud)
-        flash(f'Solicitud #{solicitud.id} aprobada correctamente.', 'success')
+        flash(f'Solicitud #{solicitud.id} aprobada.', 'success')
 
     return redirect(url_for('prestamos.gestionar'))
 
@@ -366,14 +364,11 @@ def devolucion(solicitud_id):
 
         if solicitud.recurso:
             if estado_devolucion == 'bueno':
-                solicitud.recurso.cantidad_disponible += 1
                 solicitud.recurso.estado = 'disponible'
             elif estado_devolucion == 'dañado':
                 solicitud.recurso.estado = 'dañado'
             elif estado_devolucion == 'perdido':
-                solicitud.recurso.cantidad_total = max(0, solicitud.recurso.cantidad_total - 1)
-                if solicitud.recurso.cantidad_total == 0:
-                    solicitud.recurso.estado = 'dado_de_baja'
+                solicitud.recurso.estado = 'dado_de_baja'
 
         db.session.commit()
         horas = (solicitud.tiempo_uso_minutos or 0) // 60
@@ -407,14 +402,137 @@ def _notificar_resultado(solicitud):
     try:
         from flask_mail import Message
         from app import mail
-        estado = '✅ APROBADA' if solicitud.estado == 'aprobada' else '❌ RECHAZADA'
+        usuario = solicitud.usuario
+
+        if solicitud.estado == 'aprobada':
+            if solicitud.tipo == 'rfid':
+                asunto = f'✅ Acceso RFID aprobado — UCundinamarca'
+                cuerpo = (
+                    f'Hola {usuario.nombre},\n\n'
+                    f'Tu solicitud #{solicitud.id} de acceso RFID fue APROBADA.\n\n'
+                    f'Tu tarjeta {solicitud.uid_tarjeta} ha sido registrada en los '
+                    f'dispositivos solicitados. Ya puedes acceder a los espacios autorizados.\n\n'
+                    f'Sistema de Préstamos — UCundinamarca'
+                )
+            else:
+                cuerpo = (
+                    f'Hola {usuario.nombre},\n\n'
+                    f'Tu solicitud #{solicitud.id} de recurso fue APROBADA.\n\n'
+                    f'Recurso: {solicitud.get_item_nombre()}\n'
+                    f'Desde: {solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_inicio else "—"}\n'
+                    f'Hasta: {solicitud.fecha_fin.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin else "—"}\n\n'
+                    f'Por favor acércate a la administración a recoger el recurso '
+                    f'en el horario indicado. Presenta tu carné institucional.\n\n'
+                    f'Sistema de Préstamos — UCundinamarca'
+                )
+                asunto = f'✅ Solicitud #{solicitud.id} aprobada — Pasa a recoger tu recurso'
+        else:
+            asunto = f'❌ Solicitud #{solicitud.id} rechazada — UCundinamarca'
+            cuerpo = (
+                f'Hola {usuario.nombre},\n\n'
+                f'Tu solicitud #{solicitud.id} fue RECHAZADA.\n\n'
+                f'Motivo: {solicitud.motivo_rechazo}\n\n'
+                f'Si tienes dudas, acércate a la administración.\n\n'
+                f'Sistema de Préstamos — UCundinamarca'
+            )
+
+        msg = Message(subject=asunto, recipients=[usuario.email], body=cuerpo)
+        mail.send(msg)
+    except Exception:
+        pass
+    
+    
+# ── Recursos en uso del usuario ────────────────────────────────────────────────
+
+@bp.route('/mis-recursos')
+@login_required
+@usuario_regular_required
+def mis_recursos():
+    """Recursos actualmente prestados al usuario."""
+    recursos_activos = Solicitud.query.filter_by(
+        usuario_id=current_user.id,
+        tipo='recurso',
+        estado='aprobada'
+    ).order_by(Solicitud.fecha_inicio.desc()).all()
+    return render_template('prestamos/mis_recursos.html',
+                           recursos_activos=recursos_activos)
+
+
+@bp.route('/entregar/<int:solicitud_id>', methods=['POST'])
+@login_required
+@usuario_regular_required
+def entregar_recurso(solicitud_id):
+    """El usuario entrega el recurso antes del plazo."""
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+
+    if solicitud.usuario_id != current_user.id:
+        flash('No tienes permiso para esta acción.', 'danger')
+        return redirect(url_for('prestamos.mis_recursos'))
+
+    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
+        flash('Este recurso no puede ser entregado desde aquí.', 'warning')
+        return redirect(url_for('prestamos.mis_recursos'))
+
+    solicitud.estado = 'devuelta'
+    solicitud.fecha_devolucion_real = ahora_bogota()
+    solicitud.calcular_tiempo_uso()
+    if solicitud.recurso:
+        solicitud.recurso.estado = 'disponible'
+    db.session.commit()
+    flash(f'Recurso "{solicitud.get_item_nombre()}" marcado como entregado. '
+          f'Recuerda llevarlo físicamente a la administración.', 'success')
+    return redirect(url_for('prestamos.mis_recursos'))
+
+
+@bp.route('/extender/<int:solicitud_id>', methods=['GET', 'POST'])
+@login_required
+@usuario_regular_required
+def extender_plazo(solicitud_id):
+    """El usuario extiende el plazo de un recurso prestado."""
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+
+    if solicitud.usuario_id != current_user.id:
+        flash('No tienes permiso para esta acción.', 'danger')
+        return redirect(url_for('prestamos.mis_recursos'))
+
+    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
+        flash('No puedes extender este préstamo.', 'warning')
+        return redirect(url_for('prestamos.mis_recursos'))
+
+    if request.method == 'POST':
+        nueva_fecha_str = request.form.get('nueva_fecha_fin', '')
+        try:
+            nueva_fecha = datetime.strptime(nueva_fecha_str, '%Y-%m-%dT%H:%M')
+            fecha_actual = solicitud.fecha_fin_extendida or solicitud.fecha_fin
+            if nueva_fecha <= fecha_actual:
+                flash('La nueva fecha debe ser posterior a la fecha de fin actual.', 'danger')
+                return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
+            solicitud.fecha_fin_extendida = nueva_fecha
+            db.session.commit()
+            flash(f'Plazo extendido hasta {nueva_fecha.strftime("%d/%m/%Y %H:%M")}. '
+                  f'El operador será notificado.', 'success')
+            # Notificar al operador
+            _notificar_extension(solicitud)
+            return redirect(url_for('prestamos.mis_recursos'))
+        except ValueError:
+            flash('Formato de fecha inválido.', 'danger')
+
+    return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
+
+
+def _notificar_extension(solicitud):
+    try:
+        from flask_mail import Message
+        from app import mail
         msg = Message(
-            subject=f'Solicitud #{solicitud.id} {estado} — UCundinamarca',
+            subject=f'⏰ Extensión de plazo solicitada — Solicitud #{solicitud.id}',
             recipients=[solicitud.usuario.email],
-            body=(f'Hola {solicitud.usuario.nombre},\n\n'
-                  f'Tu solicitud #{solicitud.id} fue {solicitud.estado}.\n'
-                  f'{f"Motivo: {solicitud.motivo_rechazo}" if solicitud.motivo_rechazo else ""}\n\n'
-                  f'Sistema de Préstamos — UCundinamarca')
+            body=(
+                f'El usuario {solicitud.usuario.nombre} {solicitud.usuario.apellido} '
+                f'ha extendido el plazo del recurso "{solicitud.get_item_nombre()}" '
+                f'hasta el {solicitud.fecha_fin_extendida.strftime("%d/%m/%Y %H:%M")}.\n\n'
+                f'Sistema de Préstamos — UCundinamarca'
+            )
         )
         mail.send(msg)
     except Exception:

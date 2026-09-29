@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Extender Plazo — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('prestamos.mis_recursos') }}" class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-clock-history me-2 text-ucundi"></i>Extender Plazo
+            </h2>
+        </div>
+
+        <!-- Info del recurso -->
+        <div class="card border-0 shadow-sm mb-3 bg-light">
+            <div class="card-body py-3 small">
+                <div class="row g-1">
+                    <div class="col-5 text-muted fw-semibold">Recurso:</div>
+                    <div class="col-7 fw-bold">{{ solicitud.get_item_nombre() }}</div>
+                    <div class="col-5 text-muted fw-semibold">Fecha fin actual:</div>
+                    <div class="col-7">
+                        {{ solicitud.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M') if solicitud.fecha_fin_efectiva() else '—' }}
+                        {% if solicitud.fecha_fin_extendida %}
+                        <span class="badge bg-info text-dark ms-1">Extendida</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="alert alert-warning small py-2 mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Al extender el plazo se notificará al operador para su conocimiento.
+                </div>
+                <form method="POST" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold small">Nueva fecha y hora de entrega *</label>
+                        <input type="datetime-local" class="form-control" name="nueva_fecha_fin" required>
+                        <div class="form-text">Debe ser posterior a la fecha de fin actual.</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning px-4 fw-semibold">
+                            <i class="bi bi-clock-history me-1"></i>Confirmar extensión
+                        </button>
+                        <a href="{{ url_for('prestamos.mis_recursos') }}" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

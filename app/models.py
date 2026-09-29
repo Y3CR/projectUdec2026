@@ -124,19 +124,21 @@ class Recurso(db.Model):
     __tablename__ = 'recursos'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(150), nullable=False)
-    codigo = db.Column(db.String(50), unique=True, nullable=False)
+    serial = db.Column(db.String(100), unique=True, nullable=False)   # identificador físico
+    codigo_interno = db.Column(db.String(50), unique=True, nullable=False)  # control institucional
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'), nullable=False)
     descripcion = db.Column(db.Text)
     estado = db.Column(db.String(50), default='disponible')
-    cantidad_total = db.Column(db.Integer, default=1)
-    cantidad_disponible = db.Column(db.Integer, default=1)
+    # estados: disponible, prestado, mantenimiento, dañado, dado_de_baja
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     solicitudes = db.relationship('Solicitud', backref='recurso', lazy='dynamic')
 
-    def __repr__(self):
-        return f'<Recurso {self.codigo}>'
+    def esta_disponible(self):
+        return self.estado == 'disponible'
 
+    def __repr__(self):
+        return f'<Recurso {self.serial}>'
 
 # ── Sprint 3: Solicitudes ──────────────────────────────────────────────────────
 
@@ -162,6 +164,10 @@ class Solicitud(db.Model):
     novedad_devolucion = db.Column(db.Text, nullable=True)
     tiempo_uso_minutos = db.Column(db.Integer, nullable=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_fin_extendida = db.Column(db.DateTime, nullable=True)
+
+def fecha_fin_efectiva(self):
+    return self.fecha_fin_extendida or self.fecha_fin
 
     def calcular_tiempo_uso(self):
         if self.fecha_devolucion_real and self.fecha_inicio:

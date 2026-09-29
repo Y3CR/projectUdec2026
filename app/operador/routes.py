@@ -212,30 +212,31 @@ def nuevo_recurso():
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
-        codigo = request.form.get('codigo', '').strip().upper()
+        serial = request.form.get('serial', '').strip().upper()
+        codigo_interno = request.form.get('codigo_interno', '').strip().upper()
         categoria_id = request.form.get('categoria_id', type=int)
         descripcion = request.form.get('descripcion', '').strip()
         estado = request.form.get('estado', 'disponible')
-        cantidad_total = request.form.get('cantidad_total', 1, type=int)
-        cantidad_disponible = request.form.get('cantidad_disponible', 1, type=int)
 
-        errores = _validar_recurso(nombre, codigo, categoria_id, cantidad_total,
-                                   cantidad_disponible, estado, estados)
+        errores = _validar_recurso(nombre, serial, codigo_interno, categoria_id, estado, estados)
         if errores:
             for e in errores:
                 flash(e, 'danger')
             return render_template('operador/recurso_form.html', categorias=categorias,
                                    estados=estados, accion='Registrar', data=request.form)
 
-        if Recurso.query.filter_by(codigo=codigo).first():
-            flash(f'Ya existe un recurso con el código {codigo}.', 'danger')
+        if Recurso.query.filter_by(serial=serial).first():
+            flash(f'Ya existe un recurso con el serial {serial}.', 'danger')
             return render_template('operador/recurso_form.html', categorias=categorias,
                                    estados=estados, accion='Registrar', data=request.form)
 
-        recurso = Recurso(nombre=nombre, codigo=codigo, categoria_id=categoria_id,
-                          descripcion=descripcion, estado=estado,
-                          cantidad_total=cantidad_total,
-                          cantidad_disponible=cantidad_disponible)
+        if Recurso.query.filter_by(codigo_interno=codigo_interno).first():
+            flash(f'Ya existe un recurso con el código {codigo_interno}.', 'danger')
+            return render_template('operador/recurso_form.html', categorias=categorias,
+                                   estados=estados, accion='Registrar', data=request.form)
+
+        recurso = Recurso(nombre=nombre, serial=serial, codigo_interno=codigo_interno,
+                          categoria_id=categoria_id, descripcion=descripcion, estado=estado)
         db.session.add(recurso)
         db.session.commit()
         flash(f'Recurso "{nombre}" registrado exitosamente.', 'success')
@@ -249,6 +250,48 @@ def nuevo_recurso():
 @login_required
 @operador_required
 def editar_recurso(recurso_id):
+    recurso = Recurso.query.get_or_404(recurso_id)
+    categorias = CategoriaRecurso.query.all()
+    estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        serial = request.form.get('serial', '').strip().upper()
+        codigo_interno = request.form.get('codigo_interno', '').strip().upper()
+        categoria_id = request.form.get('categoria_id', type=int)
+        descripcion = request.form.get('descripcion', '').strip()
+        estado = request.form.get('estado', 'disponible')
+
+        errores = _validar_recurso(nombre, serial, codigo_interno, categoria_id, estado, estados)
+        if errores:
+            for e in errores:
+                flash(e, 'danger')
+            return render_template('operador/recurso_form.html', categorias=categorias,
+                                   estados=estados, accion='Editar', data=request.form, recurso=recurso)
+
+        s = Recurso.query.filter_by(serial=serial).first()
+        if s and s.id != recurso_id:
+            flash(f'Ya existe otro recurso con el serial {serial}.', 'danger')
+            return render_template('operador/recurso_form.html', categorias=categorias,
+                                   estados=estados, accion='Editar', data=request.form, recurso=recurso)
+
+        c = Recurso.query.filter_by(codigo_interno=codigo_interno).first()
+        if c and c.id != recurso_id:
+            flash(f'Ya existe otro recurso con el código {codigo_interno}.', 'danger')
+            return render_template('operador/recurso_form.html', categorias=categorias,
+                                   estados=estados, accion='Editar', data=request.form, recurso=recurso)
+
+        recurso.nombre = nombre
+        recurso.serial = serial
+        recurso.codigo_interno = codigo_interno
+        recurso.categoria_id = categoria_id
+        recurso.descripcion = descripcion
+        recurso.estado = estado
+        db.session.commit()
+        flash('Recurso actualizado correctamente.', 'success')
+        return redirect(url_for('operador.recursos'))
+
+    return render_template('operador/recurso_form.html', categorias=categorias,
+                           estados=estados, accion='Editar', data={}, recurso=recurso)
     recurso = Recurso.query.get_or_404(recurso_id)
     categorias = CategoriaRecurso.query.all()
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
@@ -639,11 +682,11 @@ def usuarios_tarjetas():
         per_page = 15
     busqueda = request.args.get('q', '')
 
-    query = User.query.filter(
-        User.role.has(db.or_(
-            User.role_id == r.id for r in []
-        ))
-    )
+    ## query = User.query.filter(
+    ##    User.role.has(db.or_(
+    ##        User.role_id == r.id for r in []
+    ##    ))
+    ##)
     # Traer todos los usuarios activos excepto admin
     query = User.query.filter_by(activo=True).filter(
         ~User.role.has(name='administrador')
@@ -706,21 +749,59 @@ def _validar_espacio(nombre, codigo, tipo_id, capacidad):
     return errores
 
 
-def _validar_recurso(nombre, codigo, categoria_id, cantidad_total,
-                     cantidad_disponible, estado, estados_validos):
+def _validar_recurso(nombre, serial, codigo_interno, categoria_id, estado, estados_validos):
     errores = []
     if not nombre:
         errores.append('El nombre del recurso es obligatorio.')
-    if not codigo:
-        errores.append('El código del recurso es obligatorio.')
+    if not serial:
+        errores.append('El serial es obligatorio.')
+    if not codigo_interno:
+        errores.append('El código interno es obligatorio.')
     if not categoria_id:
         errores.append('Debes seleccionar una categoría.')
-    if cantidad_total < 1:
-        errores.append('La cantidad total debe ser al menos 1.')
-    if cantidad_disponible < 0:
-        errores.append('La cantidad disponible no puede ser negativa.')
-    if cantidad_disponible > cantidad_total:
-        errores.append('La cantidad disponible no puede superar la cantidad total.')
     if estado not in estados_validos:
         errores.append('El estado seleccionado no es válido.')
     return errores
+
+# ── Categorías de recurso (operador) ──────────────────────────────────────────
+
+@bp.route('/categorias-recurso')
+@login_required
+@operador_required
+def categorias_recurso():
+    categorias = CategoriaRecurso.query.order_by(CategoriaRecurso.nombre).all()
+    return render_template('admin/categorias_recurso.html',
+                           categorias=categorias,
+                           endpoint_nueva='operador.nueva_categoria_recurso',
+                           endpoint_eliminar='operador.eliminar_categoria_recurso')
+
+
+@bp.route('/categorias-recurso/nueva', methods=['POST'])
+@login_required
+@operador_required
+def nueva_categoria_recurso():
+    nombre = request.form.get('nombre', '').strip()
+    if not nombre:
+        flash('El nombre es obligatorio.', 'danger')
+        return redirect(url_for('operador.categorias_recurso'))
+    if CategoriaRecurso.query.filter_by(nombre=nombre).first():
+        flash('Ya existe una categoría con ese nombre.', 'danger')
+        return redirect(url_for('operador.categorias_recurso'))
+    db.session.add(CategoriaRecurso(nombre=nombre))
+    db.session.commit()
+    flash(f'Categoría "{nombre}" creada.', 'success')
+    return redirect(url_for('operador.categorias_recurso'))
+
+
+@bp.route('/categorias-recurso/<int:cat_id>/eliminar', methods=['POST'])
+@login_required
+@operador_required
+def eliminar_categoria_recurso(cat_id):
+    cat = CategoriaRecurso.query.get_or_404(cat_id)
+    if cat.recursos.count() > 0:
+        flash(f'No puedes eliminar "{cat.nombre}" porque tiene recursos asociados.', 'danger')
+        return redirect(url_for('operador.categorias_recurso'))
+    db.session.delete(cat)
+    db.session.commit()
+    flash(f'Categoría "{cat.nombre}" eliminada.', 'success')
+    return redirect(url_for('operador.categorias_recurso'))

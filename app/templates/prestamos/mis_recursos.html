@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Mis Recursos en Uso — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">
+        <i class="bi bi-laptop me-2 text-ucundi"></i>Mis Recursos en Uso
+    </h2>
+    <a href="{{ url_for('prestamos.solicitar') }}" class="btn btn-ucundi">
+        <i class="bi bi-plus-lg me-1"></i>Nueva solicitud
+    </a>
+</div>
+
+{% if recursos_activos %}
+<div class="row g-3">
+    {% for s in recursos_activos %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="fw-bold mb-0">{{ s.get_item_nombre() }}</h6>
+                    <span class="badge bg-primary">En uso</span>
+                </div>
+
+                {% if s.recurso %}
+                <div class="small text-muted mb-3">
+                    <div><i class="bi bi-upc me-1"></i>Serial: <code>{{ s.recurso.serial }}</code></div>
+                    <div><i class="bi bi-tag me-1"></i>Código: <code>{{ s.recurso.codigo_interno }}</code></div>
+                    <div><i class="bi bi-grid me-1"></i>{{ s.recurso.categoria.nombre }}</div>
+                </div>
+                {% endif %}
+
+                <div class="small mb-3">
+                    <div class="text-muted">
+                        <i class="bi bi-calendar-check me-1"></i>
+                        Desde: {{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') if s.fecha_inicio else '—' }}
+                    </div>
+                    <div class="{% if s.fecha_fin_efectiva() and s.fecha_fin_efectiva() < ahora %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                        <i class="bi bi-calendar-x me-1"></i>
+                        Hasta: {{ s.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M') if s.fecha_fin_efectiva() else '—' }}
+                        {% if s.fecha_fin_extendida %}
+                        <span class="badge bg-info text-dark ms-1 small">Extendido</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <form method="POST"
+                          action="{{ url_for('prestamos.entregar_recurso', solicitud_id=s.id) }}"
+                          class="flex-fill"
+                          onsubmit="return confirm('¿Confirmas que vas a entregar este recurso? Recuerda llevarlo físicamente a la administración.')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success btn-sm w-100">
+                            <i class="bi bi-box-arrow-in-down me-1"></i>Entregar
+                        </button>
+                    </form>
+                    <a href="{{ url_for('prestamos.extender_plazo', solicitud_id=s.id) }}"
+                       class="btn btn-outline-warning btn-sm flex-fill">
+                        <i class="bi bi-clock-history me-1"></i>Extender
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-laptop fs-1 text-muted mb-3 d-block"></i>
+        <h5 class="fw-bold">No tienes recursos en uso</h5>
+        <p class="text-muted">Cuando tengas un recurso aprobado aparecerá aquí.</p>
+        <a href="{{ url_for('prestamos.solicitar') }}" class="btn btn-ucundi">
+            <i class="bi bi-plus-lg me-1"></i>Solicitar recurso
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
