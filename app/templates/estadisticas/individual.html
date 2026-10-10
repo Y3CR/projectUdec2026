@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}Estadística Individual — UCundinamarca{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-person-lines-fill me-2 text-ucundi"></i>Estadística Individual
+        </h2>
+        <p class="text-muted small mb-0">Análisis detallado por usuario, recurso o espacio</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-danger btn-sm" onclick="exportarPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+        </button>
+        <a href="{{ url_for('estadisticas.dashboard') }}"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold mb-1">Tipo</label>
+                <select class="form-select form-select-sm" name="tipo" id="tipoSel"
+                        onchange="actualizarOpciones(); this.form.submit()">
+                    <option value="usuario" {% if tipo == 'usuario' %}selected{% endif %}>
+                        Usuario
+                    </option>
+                    <option value="recurso" {% if tipo == 'recurso' %}selected{% endif %}>
+                        Recurso
+                    </option>
+                    <option value="espacio" {% if tipo == 'espacio' %}selected{% endif %}>
+                        Espacio
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1">Seleccionar</label>
+                <select class="form-select form-select-sm" name="id" id="itemSel">
+                    {% if tipo == 'usuario' %}
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}"
+                            {% if item_id == u.id %}selected{% endif %}>
+                            {{ u.nombre }} {{ u.apellido }}
+                            ({{ u.get_role_name() | capitalize }})
+                        </option>
+                        {% endfor %}
+                    {% elif tipo == 'recurso' %}
+                        {% for r in recursos_lista %}
+                        <option value="{{ r.id }}"
+                            {% if item_id == r.id %}selected{% endif %}>
+                            {{ r.nombre }}
+                        </option>
+                        {% endfor %}
+                    {% elif tipo == 'espacio' %}
+                        {% for e in espacios %}
+                        <option value="{{ e.id }}"
+                            {% if item_id == e.id %}selected{% endif %}>
+                            {{ e.nombre }}
+                        </option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold mb-1">Período</label>
+                <select class="form-select form-select-sm" name="periodo">
+                    {% for p, l in [('semana','Última semana'), ('mes','Último mes'),
+                                    ('trimestre','Último trimestre'), ('anio','Este año')] %}
+                    <option value="{{ p }}" {% if periodo == p %}selected{% endif %}>{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-ucundi btn-sm">
+                    <i class="bi bi-search me-1"></i>Analizar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if item %}
+
+<!-- KPIs del elemento seleccionado -->
+<div class="card border-0 shadow-sm mb-4" id="seccionIndividual">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="rounded-circle d-flex align-items-center justify-content-center
+                        text-white fw-bold fs-4 flex-shrink-0"
+                 style="width:52px;height:52px;background:#1b4332;">
+                {% if tipo == 'usuario' %}
+                    {{ item.nombre[0] }}{{ item.apellido[0] }}
+                {% elif tipo == 'recurso' %}
+                    <i class="bi bi-laptop fs-5"></i>
+                {% else %}
+                    <i class="bi bi-door-open fs-5"></i>
+                {% endif %}
+            </div>
+            <div>
+                {% if tipo == 'usuario' %}
+                <h5 class="fw-bold mb-0">{{ item.nombre }} {{ item.apellido }}</h5>
+                <span class="badge bg-ucundi">{{ item.get_role_name() | capitalize }}</span>
+                <span class="text-muted small ms-2">{{ item.email }}</span>
+                {% elif tipo == 'recurso' %}
+                <h5 class="fw-bold mb-0">{{ item.nombre }}</h5>
+                <span class="badge bg-secondary">{{ item.categoria.nombre }}</span>
+                <code class="small ms-2">{{ item.serial or item.codigo_interno or '' }}</code>
+                {% else %}
+                <h5 class="fw-bold mb-0">{{ item.nombre }}</h5>
+                <span class="badge bg-secondary">{{ item.tipo.nombre }}</span>
+                <span class="text-muted small ms-2">{{ item.ubicacion or '' }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- KPIs según tipo -->
+        <div class="row g-3 mb-4">
+            {% if tipo == 'usuario' %}
+            {% set kpi_list = [
+                (datos.total, 'Total solicitudes', '#1b4332'),
+                (datos.aprobadas, 'Aprobadas', '#198754'),
+                (datos.rechazadas, 'Rechazadas', '#dc3545'),
+                (datos.en_uso, 'En uso ahora', '#0d6efd'),
+                ((datos.tiempo_total // 60)|string + 'h', 'Tiempo total uso', '#b8901f'),
+            ] %}
+            {% elif tipo == 'recurso' %}
+            {% set kpi_list = [
+                (datos.total_solicitudes, 'Total solicitudes', '#1b4332'),
+                (datos.veces_prestado, 'Veces prestado', '#198754'),
+                ((datos.tiempo_promedio // 60)|string + 'h', 'Tiempo promedio', '#b8901f'),
+            ] %}
+            {% else %}
+            {% set kpi_list = [
+                (datos.total_accesos, 'Total accesos', '#1b4332'),
+                (datos.permitidos, 'Permitidos', '#198754'),
+                (datos.denegados, 'Denegados', '#dc3545'),
+            ] %}
+            {% endif %}
+
+            {% for valor, etiqueta, color in kpi_list %}
+            <div class="col-6 col-md-auto flex-md-fill">
+                <div class="card border-0 bg-light text-center py-3">
+                    <div class="fw-bold" style="font-size:1.8rem;color:{{ color }};">
+                        {{ valor }}
+                    </div>
+                    <div class="text-muted small">{{ etiqueta }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Gráfica de actividad por mes -->
+        <div class="card border border-0 bg-light p-3">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="fw-semibold small">
+                    <i class="bi bi-graph-up me-1 text-ucundi"></i>Actividad por mes (12 meses)
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartIndividual', 'actividad_individual')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <canvas id="chartIndividual" height="100"></canvas>
+        </div>
+
+        <!-- Últimos registros -->
+        <div class="mt-4">
+            <h6 class="fw-bold mb-3">Últimos registros</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            {% if tipo == 'usuario' %}
+                            <th>#</th><th>Item</th><th>Fecha</th><th>Estado</th><th>Tiempo</th>
+                            {% elif tipo == 'recurso' %}
+                            <th>Usuario</th><th>Fecha</th><th>Estado</th><th>Tiempo uso</th>
+                            {% else %}
+                            <th>Fecha/Hora</th><th>Usuario</th><th>Tipo</th><th>Resultado</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if tipo in ['usuario', 'recurso'] %}
+                        {% for s in datos.solicitudes %}
+                        <tr>
+                            {% if tipo == 'usuario' %}
+                            <td class="text-muted small">{{ s.id }}</td>
+                            <td class="small">{{ s.get_item_nombre() }}</td>
+                            {% else %}
+                            <td class="small">
+                                {{ s.usuario.nombre }} {{ s.usuario.apellido }}
+                            </td>
+                            {% endif %}
+                            <td class="small">
+                                {{ s.fecha_creacion.strftime('%d/%m/%Y') }}
+                            </td>
+                            <td>
+                                {% if s.estado == 'devuelta' %}
+                                <span class="badge bg-info text-dark small">Devuelta</span>
+                                {% elif s.estado == 'entregado' %}
+                                <span class="badge bg-success small">En uso</span>
+                                {% elif s.estado == 'rechazada' %}
+                                <span class="badge bg-danger small">Rechazada</span>
+                                {% else %}
+                                <span class="badge bg-secondary small">{{ s.estado }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% if s.tiempo_uso_minutos %}
+                                {{ s.tiempo_uso_minutos // 60 }}h
+                                {{ s.tiempo_uso_minutos % 60 }}min
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        {% for a in datos.accesos %}
+                        <tr>
+                            <td class="small">
+                                {{ a.fecha_evento.strftime('%d/%m/%Y %H:%M') }}
+                            </td>
+                            <td class="small">
+                                {{ a.usuario.nombre ~ ' ' ~ a.usuario.apellido if a.usuario else 'Desconocido' }}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary small">
+                                    {{ a.tipo_evento | capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if a.autorizado %}
+                                <span class="badge bg-success small">✅ Permitido</span>
+                                {% else %}
+                                <span class="badge bg-danger small">❌ Denegado</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-bar-chart fs-1 text-muted d-block mb-3"></i>
+        <h5 class="fw-bold">Selecciona un elemento para analizar</h5>
+        <p class="text-muted">Elige un usuario, recurso o espacio y haz clic en Analizar.</p>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script>
+    const charts = {};
+    const TIPO = "{{ tipo }}";
+    const ITEM_ID = {{ item_id or 0 }};
+    const PERIODO = "{{ periodo }}";
+
+    {% if item %}
+    fetch(`/estadisticas/api/individual/solicitudes-por-mes?tipo=${TIPO}&id=${ITEM_ID}`)
+        .then(r => r.json()).then(d => {
+            const ctx = document.getElementById('chartIndividual');
+            if (!ctx) return;
+            charts['chartIndividual'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: d.labels,
+                    datasets: [{
+                        label: 'Actividad',
+                        data: d.data,
+                        backgroundColor: '#1b4332',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        });
+    {% endif %}
+
+    function descargarGrafica(chartId, nombre) {
+        const chart = charts[chartId];
+        if (!chart) return;
+        const a = document.createElement('a');
+        a.href = chart.toBase64Image();
+        a.download = `${nombre}.png`;
+        a.click();
+    }
+
+    async function exportarPDF() {
+        const { jsPDF } = window.jspdf;
+        const btn = document.querySelector('button[onclick="exportarPDF()"]');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
+        btn.disabled = true;
+
+        const canvas = await html2canvas(
+            document.getElementById('seccionIndividual') || document.body,
+            { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' }
+        );
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+        const pageH = pdf.internal.pageSize.getHeight();
+        let posY = 0;
+
+        for (let i = 0; i < Math.ceil(pdfH / pageH); i++) {
+            if (i > 0) pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
+            posY += pageH;
+        }
+
+        pdf.save(`estadistica_${TIPO}_${ITEM_ID}.pdf`);
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
+        btn.disabled = false;
+    }
+</script>
+{% endblock %}

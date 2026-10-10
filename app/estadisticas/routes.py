@@ -81,16 +81,16 @@ def dashboard():
     }
 
     # Usuarios para filtro individual
-    usuarios = User.query.filter(
-        User.activo == True,
-        User.role.has(db.or_(
-            *[User.role_id == r for r in [
-                db.session.query(db.Column).from_statement(
-                    db.text("SELECT id FROM roles WHERE name IN ('docente','estudiante')")
-                )
-            ]]
-        ))
-    ).order_by(User.nombre).all()
+    #usuarios = User.query.filter(
+    #    User.activo == True,
+    #    User.role.has(db.or_(
+    #        *[User.role_id == r for r in [
+    #            db.session.query(db.Column).from_statement(
+    #                db.text("SELECT id FROM roles WHERE name IN ('docente','estudiante')")
+    #            )
+    #        ]]
+    #    ))
+    #).order_by(User.nombre).all()
 
     # Más simple: traer docentes y estudiantes
     from app.models import Role
@@ -357,6 +357,7 @@ def individual():
     periodo = request.args.get('periodo', 'mes')
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
+   
     from app.models import Role
     roles_ids = [r.id for r in Role.query.filter(
         Role.name.in_(['docente', 'estudiante'])

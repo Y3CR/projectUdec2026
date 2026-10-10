@@ -58,25 +58,102 @@
 </div>
 
 <!-- KPIs -->
-<div class="row g-3 mb-4" id="seccionKpis">
-    {% set kpi_items = [
-        ('total_solicitudes', 'Total solicitudes', 'bi-clipboard-check', '#1b4332', 'bg-success-soft'),
-        ('aprobadas', 'Aprobadas/Entregadas', 'bi-check-circle', '#198754', 'bg-success-soft'),
-        ('rechazadas', 'Rechazadas', 'bi-x-circle', '#dc3545', 'bg-danger-soft'),
-        ('en_uso', 'En uso ahora', 'bi-laptop', '#0d6efd', 'bg-primary-soft'),
-        ('recursos_disponibles', 'Recursos disponibles', 'bi-box-seam', '#b8901f', 'bg-warning-soft'),
-        ('accesos_rfid', 'Accesos RFID', 'bi-wifi', '#6f42c1', 'bg-primary-soft'),
-    ] %}
-    {% for key, label, icon, color, bg in kpi_items %}
-    <div class="col-6 col-md-4 col-lg-2">
-        <div class="card border-0 shadow-sm text-center py-3 h-100">
-            <div class="fw-bold mb-1" style="font-size:2rem;color:{{ color }};">
-                {{ kpis[key] }}
+<!-- KPIs según tipo -->
+<div class="row g-3 mb-4">
+    {% if tipo == 'usuario' %}
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                {{ datos.total }}
             </div>
-            <div class="text-muted" style="font-size:0.75rem;">{{ label }}</div>
+            <div class="text-muted small">Total solicitudes</div>
         </div>
     </div>
-    {% endfor %}
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                {{ datos.aprobadas }}
+            </div>
+            <div class="text-muted small">Aprobadas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#dc3545;">
+                {{ datos.rechazadas }}
+            </div>
+            <div class="text-muted small">Rechazadas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#0d6efd;">
+                {{ datos.en_uso }}
+            </div>
+            <div class="text-muted small">En uso ahora</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#b8901f;">
+                {{ (datos.tiempo_total // 60) }}h
+            </div>
+            <div class="text-muted small">Tiempo total uso</div>
+        </div>
+    </div>
+
+    {% elif tipo == 'recurso' %}
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                {{ datos.total_solicitudes }}
+            </div>
+            <div class="text-muted small">Total solicitudes</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                {{ datos.veces_prestado }}
+            </div>
+            <div class="text-muted small">Veces prestado</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#b8901f;">
+                {{ (datos.tiempo_promedio // 60) }}h
+            </div>
+            <div class="text-muted small">Tiempo promedio</div>
+        </div>
+    </div>
+
+    {% elif tipo == 'espacio' %}
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                {{ datos.total_accesos }}
+            </div>
+            <div class="text-muted small">Total accesos</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                {{ datos.permitidos }}
+            </div>
+            <div class="text-muted small">Permitidos</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-auto flex-md-fill">
+        <div class="card border-0 bg-light text-center py-3">
+            <div class="fw-bold" style="font-size:1.8rem;color:#dc3545;">
+                {{ datos.denegados }}
+            </div>
+            <div class="text-muted small">Denegados</div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Gráficas — Fila 1 -->
@@ -245,23 +322,20 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-semibold">Seleccionar</label>
-                        <select class="form-select form-select-sm" name="id"
-                                id="selectIndividual">
+                        <select class="form-select form-select-sm" name="id" id="selectIndividual">
+                            <option value="" disabled>— Selecciona —</option>
                             {% for u in usuarios %}
                             <option value="{{ u.id }}" data-tipo="usuario">
-                                {{ u.nombre }} {{ u.apellido }}
-                                ({{ u.get_role_name() | capitalize }})
+                                {{ u.nombre }} {{ u.apellido }} ({{ u.get_role_name() | capitalize }})
                             </option>
                             {% endfor %}
                             {% for e in espacios %}
-                            <option value="{{ e.id }}" data-tipo="espacio"
-                                    style="display:none;">
+                            <option value="{{ e.id }}" data-tipo="espacio">
                                 {{ e.nombre }}
                             </option>
                             {% endfor %}
                             {% for r in recursos_lista %}
-                            <option value="{{ r.id }}" data-tipo="recurso"
-                                    style="display:none;">
+                            <option value="{{ r.id }}" data-tipo="recurso">
                                 {{ r.nombre }}
                             </option>
                             {% endfor %}
@@ -447,16 +521,23 @@
 
     // Filtro de búsqueda individual
     function actualizarOpciones() {
-        const tipo = document.getElementById('tipoIndividual').value;
-        const select = document.getElementById('selectIndividual');
-        Array.from(select.options).forEach(opt => {
-            opt.style.display = opt.dataset.tipo === tipo ? '' : 'none';
-        });
-        // Seleccionar el primer visible
-        const primero = Array.from(select.options).find(
-            o => o.dataset.tipo === tipo
-        );
-        if (primero) select.value = primero.value;
-    }
+    const tipo = document.getElementById('tipoIndividual').value;
+    const select = document.getElementById('selectIndividual');
+    let primero = true;
+    Array.from(select.options).forEach(opt => {
+        if (!opt.dataset.tipo) return; // skip el disabled
+        if (opt.dataset.tipo === tipo) {
+            opt.style.display = '';
+            if (primero) {
+                select.value = opt.value;
+                primero = false;
+            }
+        } else {
+            opt.style.display = 'none';
+        }
+    });
+}
+// Ejecutar al cargar
+actualizarOpciones();
 </script>
 {% endblock %}
