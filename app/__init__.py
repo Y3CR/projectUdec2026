@@ -45,6 +45,9 @@ def create_app(config_class=Config):
 
     from app.accesos import bp as accesos_bp
     app.register_blueprint(accesos_bp, url_prefix='/accesos')
+    
+    from app.estadisticas import bp as estadisticas_bp
+    app.register_blueprint(estadisticas_bp, url_prefix='/estadisticas')
 
     @app.route('/')
     def index():

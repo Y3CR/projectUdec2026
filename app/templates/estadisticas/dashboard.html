@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Estadísticas — UCundinamarca{% endblock %}
+
+{% block content %}
+
+<!-- Encabezado y filtros -->
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-bar-chart-line me-2 text-ucundi"></i>Dashboard Estadísticas
+        </h2>
+        <p class="text-muted small mb-0">Análisis general del sistema de préstamos</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <!-- Exportar Excel -->
+        <a href="{{ url_for('estadisticas.exportar_excel', periodo=periodo, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta) }}"
+           class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </a>
+        <!-- Exportar PDF del dashboard -->
+        <button class="btn btn-outline-danger btn-sm" onclick="exportarPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF Dashboard
+        </button>
+        <!-- Individual -->
+        <a href="{{ url_for('estadisticas.individual') }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-person-lines-fill me-1"></i>Individual
+        </a>
+    </div>
+</div>
+
+<!-- Filtro de período -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-2">
+        <form method="GET" class="d-flex flex-wrap gap-2 align-items-center" id="formFiltro">
+            <label class="small fw-semibold text-muted mb-0">Período:</label>
+            {% for p, label in [('semana','Última semana'), ('mes','Último mes'),
+                                 ('trimestre','Último trimestre'), ('anio','Este año'),
+                                 ('personalizado','Personalizado')] %}
+            <a href="{{ url_for('estadisticas.dashboard', periodo=p) }}"
+               class="btn btn-sm {% if periodo == p %}btn-ucundi{% else %}btn-outline-secondary{% endif %}">
+                {{ label }}
+            </a>
+            {% endfor %}
+
+            {% if periodo == 'personalizado' %}
+            <input type="date" class="form-control form-control-sm w-auto"
+                   name="fecha_desde" value="{{ fecha_desde }}"
+                   onchange="this.form.submit()">
+            <span class="text-muted small">hasta</span>
+            <input type="date" class="form-control form-control-sm w-auto"
+                   name="fecha_hasta" value="{{ fecha_hasta }}"
+                   onchange="this.form.submit()">
+            <input type="hidden" name="periodo" value="personalizado">
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-4" id="seccionKpis">
+    {% set kpi_items = [
+        ('total_solicitudes', 'Total solicitudes', 'bi-clipboard-check', '#1b4332', 'bg-success-soft'),
+        ('aprobadas', 'Aprobadas/Entregadas', 'bi-check-circle', '#198754', 'bg-success-soft'),
+        ('rechazadas', 'Rechazadas', 'bi-x-circle', '#dc3545', 'bg-danger-soft'),
+        ('en_uso', 'En uso ahora', 'bi-laptop', '#0d6efd', 'bg-primary-soft'),
+        ('recursos_disponibles', 'Recursos disponibles', 'bi-box-seam', '#b8901f', 'bg-warning-soft'),
+        ('accesos_rfid', 'Accesos RFID', 'bi-wifi', '#6f42c1', 'bg-primary-soft'),
+    ] %}
+    {% for key, label, icon, color, bg in kpi_items %}
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 shadow-sm text-center py-3 h-100">
+            <div class="fw-bold mb-1" style="font-size:2rem;color:{{ color }};">
+                {{ kpis[key] }}
+            </div>
+            <div class="text-muted" style="font-size:0.75rem;">{{ label }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Gráficas — Fila 1 -->
+<div class="row g-3 mb-3" id="seccionGraficas">
+
+    <!-- Solicitudes por mes (línea) -->
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-graph-up me-2 text-ucundi"></i>Solicitudes por mes
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartMes', 'solicitudes_mes')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartMes" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estados (donut) -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-pie-chart me-2 text-ucundi"></i>Por estado
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartEstados', 'estados')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                <canvas id="chartEstados" style="max-height:220px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Gráficas — Fila 2 -->
+<div class="row g-3 mb-3">
+
+    <!-- Recursos más solicitados (barras) -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-laptop me-2 text-ucundi"></i>Recursos más solicitados
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartRecursos', 'recursos_top')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartRecursos" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Espacios más accedidos (barras horizontal) -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-door-open me-2 text-ucundi"></i>Espacios más accedidos
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartEspacios', 'espacios_top')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartEspacios" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Gráficas — Fila 3 -->
+<div class="row g-3 mb-3">
+
+    <!-- Accesos por hora -->
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-clock me-2 text-ucundi"></i>Accesos RFID por hora del día
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartHoras', 'accesos_hora')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartHoras" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tiempo promedio de uso -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-hourglass-split me-2 text-ucundi"></i>Tiempo promedio (horas)
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartTiempo', 'tiempo_uso')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartTiempo" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Gráficas — Fila 4 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2 d-flex justify-content-between">
+                <span class="fw-semibold">
+                    <i class="bi bi-people me-2 text-ucundi"></i>Usuarios más activos
+                </span>
+                <button class="btn btn-sm btn-outline-secondary"
+                        onclick="descargarGrafica('chartUsuarios', 'usuarios_activos')">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <canvas id="chartUsuarios" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Búsqueda individual rápida -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3 pb-2">
+                <span class="fw-semibold">
+                    <i class="bi bi-search me-2 text-ucundi"></i>Búsqueda individual
+                </span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Consulta estadísticas específicas de un usuario, recurso o espacio.
+                </p>
+                <form action="{{ url_for('estadisticas.individual') }}" method="GET">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Tipo</label>
+                        <select class="form-select form-select-sm" name="tipo"
+                                id="tipoIndividual" onchange="actualizarOpciones()">
+                            <option value="usuario">Usuario</option>
+                            <option value="recurso">Recurso</option>
+                            <option value="espacio">Espacio</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Seleccionar</label>
+                        <select class="form-select form-select-sm" name="id"
+                                id="selectIndividual">
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}" data-tipo="usuario">
+                                {{ u.nombre }} {{ u.apellido }}
+                                ({{ u.get_role_name() | capitalize }})
+                            </option>
+                            {% endfor %}
+                            {% for e in espacios %}
+                            <option value="{{ e.id }}" data-tipo="espacio"
+                                    style="display:none;">
+                                {{ e.nombre }}
+                            </option>
+                            {% endfor %}
+                            {% for r in recursos_lista %}
+                            <option value="{{ r.id }}" data-tipo="recurso"
+                                    style="display:none;">
+                                {{ r.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <input type="hidden" name="periodo" value="{{ periodo }}">
+                    <button type="submit" class="btn btn-ucundi w-100">
+                        <i class="bi bi-bar-chart me-1"></i>Ver estadísticas
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<!-- html2canvas para captura -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- jsPDF para exportar PDF -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script>
+    const PERIODO = "{{ periodo }}";
+    const VERDE = '#1b4332';
+
+    // Defaults de Chart.js
+    Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+    Chart.defaults.font.size = 12;
+
+    const charts = {};
+
+    function crearChart(id, tipo, labels, datasets, opciones = {}) {
+        const ctx = document.getElementById(id);
+        if (!ctx) return;
+        if (charts[id]) charts[id].destroy();
+        charts[id] = new Chart(ctx, {
+            type: tipo,
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: tipo === 'doughnut' ? 'bottom' : 'top' },
+                    tooltip: { callbacks: {} }
+                },
+                ...opciones
+            }
+        });
+    }
+
+    // 1. Solicitudes por mes
+    fetch(`/estadisticas/api/solicitudes-por-mes?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartMes', 'line', d.labels,
+                d.datasets.map(ds => ({
+                    label: ds.label,
+                    data: ds.data,
+                    borderColor: ds.color,
+                    backgroundColor: ds.color + '22',
+                    tension: 0.4,
+                    fill: ds.label === 'Total',
+                    pointRadius: 4
+                })),
+                { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            );
+        });
+
+    // 2. Estados (donut)
+    fetch(`/estadisticas/api/solicitudes-por-estado?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartEstados', 'doughnut', d.labels,
+                [{ data: d.data, backgroundColor: d.colors, borderWidth: 2 }]
+            );
+        });
+
+    // 3. Recursos más solicitados
+    fetch(`/estadisticas/api/recursos-mas-solicitados?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartRecursos', 'bar', d.labels,
+                [{ label: 'Solicitudes', data: d.data,
+                   backgroundColor: VERDE, borderRadius: 4 }],
+                { scales: { y: { beginAtZero: true } },
+                  plugins: { legend: { display: false } } }
+            );
+        });
+
+    // 4. Espacios más accedidos (horizontal)
+    fetch(`/estadisticas/api/espacios-mas-accedidos?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartEspacios', 'bar', d.labels,
+                [{ label: 'Accesos', data: d.data,
+                   backgroundColor: d.colors, borderRadius: 4 }],
+                { indexAxis: 'y',
+                  scales: { x: { beginAtZero: true } },
+                  plugins: { legend: { display: false } } }
+            );
+        });
+
+    // 5. Accesos por hora
+    fetch(`/estadisticas/api/accesos-por-hora?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartHoras', 'bar', d.labels,
+                d.datasets.map(ds => ({
+                    label: ds.label,
+                    data: ds.data,
+                    backgroundColor: ds.color + 'cc',
+                    borderRadius: 3
+                })),
+                { scales: { y: { beginAtZero: true }, x: { stacked: false } } }
+            );
+        });
+
+    // 6. Tiempo promedio
+    fetch(`/estadisticas/api/tiempo-uso-promedio?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartTiempo', 'bar', d.labels,
+                [{ label: 'Horas promedio', data: d.data,
+                   backgroundColor: '#b8901f', borderRadius: 4 }],
+                { scales: { y: { beginAtZero: true } },
+                  plugins: { legend: { display: false } } }
+            );
+        });
+
+    // 7. Usuarios más activos
+    fetch(`/estadisticas/api/usuarios-mas-activos?periodo=${PERIODO}`)
+        .then(r => r.json()).then(d => {
+            crearChart('chartUsuarios', 'bar', d.labels,
+                [{ label: 'Solicitudes', data: d.data,
+                   backgroundColor: '#0d6efd', borderRadius: 4 }],
+                { scales: { y: { beginAtZero: true } },
+                  plugins: { legend: { display: false } } }
+            );
+        });
+
+    // Descargar gráfica individual como PNG
+    function descargarGrafica(chartId, nombre) {
+        const chart = charts[chartId];
+        if (!chart) return;
+        const url = chart.toBase64Image();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${nombre}_${PERIODO}.png`;
+        a.click();
+    }
+
+    // Exportar todo el dashboard como PDF
+    async function exportarPDF() {
+        const { jsPDF } = window.jspdf;
+        const btn = document.querySelector('button[onclick="exportarPDF()"]');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
+        btn.disabled = true;
+
+        const elemento = document.getElementById('seccionGraficas');
+        const canvas = await html2canvas(document.body, {
+            scale: 1.5,
+            useCORS: true,
+            backgroundColor: '#f5f7fa'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('l', 'mm', 'a4');
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+
+        // Si el contenido es más alto que una página, paginamos
+        const pageH = pdf.internal.pageSize.getHeight();
+        let posY = 0;
+        const totalPages = Math.ceil(pdfH / pageH);
+
+        for (let i = 0; i < totalPages; i++) {
+            if (i > 0) pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
+            posY += pageH;
+        }
+
+        pdf.save(`dashboard_estadisticas_${PERIODO}.pdf`);
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF Dashboard';
+        btn.disabled = false;
+    }
+
+    // Filtro de búsqueda individual
+    function actualizarOpciones() {
+        const tipo = document.getElementById('tipoIndividual').value;
+        const select = document.getElementById('selectIndividual');
+        Array.from(select.options).forEach(opt => {
+            opt.style.display = opt.dataset.tipo === tipo ? '' : 'none';
+        });
+        // Seleccionar el primer visible
+        const primero = Array.from(select.options).find(
+            o => o.dataset.tipo === tipo
+        );
+        if (primero) select.value = primero.value;
+    }
+</script>
+{% endblock %}
