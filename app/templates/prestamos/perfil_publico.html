@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Perfil — {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+
+        <!-- Encabezado del perfil -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="rounded-circle bg-ucundi d-flex align-items-center
+                            justify-content-center text-white fw-bold fs-4"
+                     style="width:56px;height:56px;flex-shrink:0;">
+                    {{ usuario.nombre[0] }}{{ usuario.apellido[0] }}
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-0">
+                        {{ usuario.nombre }} {{ usuario.apellido }}
+                    </h5>
+                    <span class="badge
+                        {% if usuario.get_role_name() == 'docente' %}bg-primary
+                        {% elif usuario.get_role_name() == 'estudiante' %}bg-success
+                        {% else %}bg-secondary{% endif %}">
+                        {{ usuario.get_role_name() | capitalize }}
+                    </span>
+                    <span class="text-muted small ms-2">{{ usuario.email }}</span>
+                    {% if usuario.uid_tarjeta %}
+                    <br>
+                    <span class="small text-muted">
+                        Tarjeta: <code>{{ usuario.uid_tarjeta }}</code>
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recursos activos -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold border-0 pt-3 pb-2">
+                <i class="bi bi-laptop me-2 text-success"></i>
+                Recursos en uso
+                <span class="badge bg-success ms-1">{{ activos | length }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if activos %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Recurso</th>
+                                <th>Entregado</th>
+                                <th>Devolver</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in activos %}
+                            <tr>
+                                <td class="ps-3">
+                                    <strong>{{ s.get_item_nombre() }}</strong>
+                                    {% if s.recurso %}
+                                    <br>
+                                    <code class="small">{{ s.recurso.serial or '' }}</code>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') if s.fecha_inicio else '—' }}
+                                </td>
+                                <td class="small
+                                    {% if s.fecha_fin_efectiva() %}text-danger{% endif %}">
+                                    {{ s.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M') if s.fecha_fin_efectiva() else '—' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted small text-center py-3 mb-0">
+                    Sin recursos activos.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Accesos RFID aprobados -->
+        {% if aprobados_rfid %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold border-0 pt-3 pb-2">
+                <i class="bi bi-wifi me-2 text-primary"></i>
+                Accesos RFID activos
+                <span class="badge bg-primary ms-1">{{ aprobados_rfid | length }}</span>
+            </div>
+            <div class="card-body py-2">
+                {% for s in aprobados_rfid %}
+                <div class="d-flex align-items-center gap-2 mb-1 small">
+                    <code>{{ s.uid_tarjeta }}</code>
+                    <span class="text-muted">→</span>
+                    {% for did in s.get_dispositivos_ids() %}
+                        {% set d = did | dispositivo %}
+                        <span class="badge bg-dark">{{ d.codigo if d else did }}</span>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Historial devueltos -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold border-0 pt-3 pb-2">
+                <i class="bi bi-clock-history me-2 text-info"></i>
+                Últimas devoluciones
+            </div>
+            <div class="card-body p-0">
+                {% if devueltos %}
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Recurso</th>
+                                <th>Devuelto</th>
+                                <th>Tiempo uso</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in devueltos %}
+                            <tr>
+                                <td class="ps-3 small">{{ s.get_item_nombre() }}</td>
+                                <td class="small">
+                                    {{ s.fecha_devolucion_real.strftime('%d/%m/%Y') if s.fecha_devolucion_real else '—' }}
+                                </td>
+                                <td class="small">
+                                    {% if s.tiempo_uso_minutos %}
+                                        {{ s.tiempo_uso_minutos // 60 }}h
+                                        {{ s.tiempo_uso_minutos % 60 }}min
+                                    {% else %}—{% endif %}
+                                </td>
+                                <td>
+                                    {% if s.estado_devolucion == 'bueno' %}
+                                    <span class="badge bg-success small">Bueno</span>
+                                    {% elif s.estado_devolucion == 'dañado' %}
+                                    <span class="badge bg-warning text-dark small">Dañado</span>
+                                    {% elif s.estado_devolucion == 'perdido' %}
+                                    <span class="badge bg-danger small">Perdido</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary small">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted small text-center py-3 mb-0">Sin historial.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Rechazadas -->
+        {% if rechazados %}
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3 pb-2">
+                <i class="bi bi-x-circle me-2 text-danger"></i>
+                Solicitudes rechazadas recientes
+            </div>
+            <div class="card-body py-2">
+                {% for s in rechazados %}
+                <div class="small mb-1 text-muted">
+                    <span class="badge bg-danger me-1">{{ s.id }}</span>
+                    {{ s.get_item_nombre() }} —
+                    {{ s.motivo_rechazo[:60] if s.motivo_rechazo else '—' }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

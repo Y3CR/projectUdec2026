@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Scanner QR — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">
+        <i class="bi bi-qr-code-scan me-2 text-ucundi"></i>Scanner QR
+    </h2>
+    <a href="{{ url_for('operador.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Panel
+    </a>
+</div>
+
+<div class="row g-3">
+    <!-- Cámara -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-camera me-2 text-ucundi"></i>Escanear con cámara
+            </div>
+            <div class="card-body text-center">
+                <div id="reader" style="width:100%;max-width:400px;margin:0 auto;"></div>
+                <p class="text-muted small mt-2">
+                    Apunta la cámara al QR del usuario o del comprobante.
+                </p>
+                <button id="btnIniciarCamara" class="btn btn-ucundi mt-2">
+                    <i class="bi bi-camera me-1"></i>Iniciar cámara
+                </button>
+                <button id="btnDetenerCamara" class="btn btn-outline-danger mt-2 d-none">
+                    <i class="bi bi-camera-video-off me-1"></i>Detener
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultado del escaneo -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-info-circle me-2 text-ucundi"></i>Resultado
+            </div>
+            <div class="card-body" id="resultadoPanel">
+                <p class="text-muted text-center py-4">
+                    <i class="bi bi-qr-code fs-1 d-block mb-2 text-muted"></i>
+                    Escanea un QR para ver la información
+                </p>
+            </div>
+        </div>
+
+        <!-- También ingresar URL manualmente -->
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-white fw-semibold border-0 pt-3">
+                <i class="bi bi-link me-2"></i>O ingresa la URL del QR manualmente
+            </div>
+            <div class="card-body">
+                <div class="input-group">
+                    <input type="url" class="form-control form-control-sm"
+                           id="urlManual"
+                           placeholder="https://...">
+                    <button class="btn btn-ucundi btn-sm" onclick="procesarUrl()">
+                        Ir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- html5-qrcode -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+    let html5QrCode = null;
+
+    document.getElementById('btnIniciarCamara').addEventListener('click', function () {
+        this.classList.add('d-none');
+        document.getElementById('btnDetenerCamara').classList.remove('d-none');
+
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => {
+                html5QrCode.stop();
+                document.getElementById('btnIniciarCamara').classList.remove('d-none');
+                document.getElementById('btnDetenerCamara').classList.add('d-none');
+                procesarQR(decodedText);
+            },
+            (err) => {}
+        ).catch(err => {
+            alert('No se pudo acceder a la cámara: ' + err);
+        });
+    });
+
+    document.getElementById('btnDetenerCamara').addEventListener('click', function () {
+        if (html5QrCode) {
+            html5QrCode.stop();
+            document.getElementById('btnIniciarCamara').classList.remove('d-none');
+            this.classList.add('d-none');
+        }
+    });
+
+    function procesarUrl() {
+        const url = document.getElementById('urlManual').value.trim();
+        if (url) procesarQR(url);
+    }
+
+    function procesarQR(url) {
+        const panel = document.getElementById('resultadoPanel');
+        panel.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border text-ucundi" role="status"></div>
+                <p class="mt-2 small text-muted">Procesando QR...</p>
+            </div>`;
+
+        // Mostrar el destino y un botón para ir
+        panel.innerHTML = `
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                QR leído correctamente
+            </div>
+            <p class="small text-muted mb-2">Destino detectado:</p>
+            <code class="small d-block mb-3 text-break">${url}</code>
+            <a href="${url}" class="btn btn-ucundi w-100">
+                <i class="bi bi-arrow-right me-1"></i>Abrir página
+            </a>`;
+    }
+</script>
+{% endblock %}

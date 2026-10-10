@@ -35,7 +35,7 @@
                         <i class="bi bi-calendar-check me-1"></i>
                         Desde: {{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') if s.fecha_inicio else '—' }}
                     </div>
-                    <div class="{% if s.fecha_fin_efectiva() and s.fecha_fin_efectiva() < ahora %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                    <div class="{% if s.fecha_fin_efectiva() and ahora and s.fecha_fin_efectiva() < ahora %}text-danger fw-semibold{% else %}text-muted{% endif %}">
                         <i class="bi bi-calendar-x me-1"></i>
                         Hasta: {{ s.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M') if s.fecha_fin_efectiva() else '—' }}
                         {% if s.fecha_fin_extendida %}

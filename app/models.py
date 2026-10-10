@@ -26,10 +26,10 @@ class User(UserMixin, db.Model):
     activo = db.Column(db.Boolean, default=True)
     intentos_fallidos = db.Column(db.Integer, default=0)
     bloqueado_hasta = db.Column(db.DateTime, nullable=True)
-    # UID de tarjeta RFID asignada físicamente por el operador
     uid_tarjeta = db.Column(db.String(50), nullable=True, unique=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow,
+                                    onupdate=datetime.utcnow)
 
     solicitudes = db.relationship(
         'Solicitud',
@@ -77,8 +77,6 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# ── Sprint 2: Tipos de espacio ─────────────────────────────────────────────────
-
 class TipoEspacio(db.Model):
     __tablename__ = 'tipos_espacio'
     id = db.Column(db.Integer, primary_key=True)
@@ -100,15 +98,14 @@ class Espacio(db.Model):
     descripcion = db.Column(db.Text)
     disponible = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow,
+                                    onupdate=datetime.utcnow)
     solicitudes = db.relationship('Solicitud', backref='espacio', lazy='dynamic')
     dispositivos = db.relationship('DispositivoRFID', backref='espacio', lazy='dynamic')
 
     def __repr__(self):
         return f'<Espacio {self.codigo}>'
 
-
-# ── Sprint 2: Recursos ─────────────────────────────────────────────────────────
 
 class CategoriaRecurso(db.Model):
     __tablename__ = 'categorias_recurso'
@@ -124,23 +121,24 @@ class Recurso(db.Model):
     __tablename__ = 'recursos'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(150), nullable=False)
-    serial = db.Column(db.String(100), unique=True, nullable=False)   # identificador físico
-    codigo_interno = db.Column(db.String(50), unique=True, nullable=False)  # control institucional
-    categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'), nullable=False)
+    serial = db.Column(db.String(100), unique=True, nullable=True)
+    codigo_interno = db.Column(db.String(50), unique=True, nullable=True)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'),
+                             nullable=False)
     descripcion = db.Column(db.Text)
     estado = db.Column(db.String(50), default='disponible')
-    # estados: disponible, prestado, mantenimiento, dañado, dado_de_baja
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow,
+                                    onupdate=datetime.utcnow)
     solicitudes = db.relationship('Solicitud', backref='recurso', lazy='dynamic')
+    inventario_scans = db.relationship('InventarioScan', backref='recurso', lazy='dynamic')
 
     def esta_disponible(self):
         return self.estado == 'disponible'
 
     def __repr__(self):
-        return f'<Recurso {self.serial}>'
+        return f'<Recurso {self.serial or self.nombre}>'
 
-# ── Sprint 3: Solicitudes ──────────────────────────────────────────────────────
 
 class Solicitud(db.Model):
     __tablename__ = 'solicitudes'
@@ -151,23 +149,34 @@ class Solicitud(db.Model):
     recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=True)
     uid_tarjeta = db.Column(db.String(50), nullable=True)
     dispositivos_solicitados = db.Column(db.Text, nullable=True)
+
+    # Para recursos: fecha_inicio la pone el sistema al entregar
+    # fecha_fin la pone el usuario al solicitar (cuándo planea devolver)
     fecha_inicio = db.Column(db.DateTime, nullable=True)
     fecha_fin = db.Column(db.DateTime, nullable=True)
+    fecha_fin_extendida = db.Column(db.DateTime, nullable=True)
+
     motivo = db.Column(db.Text)
+
+    # Estados recurso: pendiente → aprobada → entregado → devuelta
+    # Estados rfid:    pendiente → aprobada → rechazada
+    # También: rechazada
     estado = db.Column(db.String(20), default='pendiente')
     motivo_rechazo = db.Column(db.Text)
+
     operador_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     operador = db.relationship('User', foreign_keys=[operador_id])
     fecha_gestion = db.Column(db.DateTime, nullable=True)
+
+    # Devolución
     fecha_devolucion_real = db.Column(db.DateTime, nullable=True)
     estado_devolucion = db.Column(db.String(50), nullable=True)
     novedad_devolucion = db.Column(db.Text, nullable=True)
     tiempo_uso_minutos = db.Column(db.Integer, nullable=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    fecha_fin_extendida = db.Column(db.DateTime, nullable=True)
 
-def fecha_fin_efectiva(self):
-    return self.fecha_fin_extendida or self.fecha_fin
+    def fecha_fin_efectiva(self):
+        return self.fecha_fin_extendida or self.fecha_fin
 
     def calcular_tiempo_uso(self):
         if self.fecha_devolucion_real and self.fecha_inicio:
@@ -194,8 +203,6 @@ def fecha_fin_efectiva(self):
         return f'<Solicitud {self.id} - {self.estado}>'
 
 
-# ── Sprint 5: Dispositivos RFID ────────────────────────────────────────────────
-
 class DispositivoRFID(db.Model):
     __tablename__ = 'dispositivos_rfid'
     id = db.Column(db.Integer, primary_key=True)
@@ -212,8 +219,6 @@ class DispositivoRFID(db.Model):
         return f'<DispositivoRFID {self.codigo}>'
 
 
-# ── Sprint 5: Horario global ───────────────────────────────────────────────────
-
 class HorarioGlobal(db.Model):
     __tablename__ = 'horario_global'
     id = db.Column(db.Integer, primary_key=True)
@@ -221,7 +226,8 @@ class HorarioGlobal(db.Model):
     hora_fin = db.Column(db.String(5), nullable=False, default='22:00')
     activo = db.Column(db.Boolean, default=True)
     descripcion = db.Column(db.String(200))
-    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow,
+                                    onupdate=datetime.utcnow)
 
     def en_horario_permitido(self, hora_actual):
         try:
@@ -238,13 +244,12 @@ class HorarioGlobal(db.Model):
         return f'<HorarioGlobal {self.hora_inicio}-{self.hora_fin}>'
 
 
-# ── Sprint 5: Permisos de acceso ───────────────────────────────────────────────
-
 class PermisoAcceso(db.Model):
     __tablename__ = 'permisos_acceso'
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'), nullable=False)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'),
+                               nullable=False)
     uid_tarjeta = db.Column(db.String(50), nullable=False)
     hora_inicio = db.Column(db.String(5), nullable=True)
     hora_fin = db.Column(db.String(5), nullable=True)
@@ -267,10 +272,8 @@ class PermisoAcceso(db.Model):
             return True
 
     def __repr__(self):
-        return f'<PermisoAcceso uid={self.uid_tarjeta} dispositivo={self.dispositivo_id}>'
+        return f'<PermisoAcceso uid={self.uid_tarjeta}>'
 
-
-# ── Sprint 5: Registros de acceso ─────────────────────────────────────────────
 
 class RegistroAcceso(db.Model):
     __tablename__ = 'registros_acceso'
@@ -280,7 +283,8 @@ class RegistroAcceso(db.Model):
     usuario = db.relationship('User', foreign_keys=[usuario_id])
     espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
     espacio = db.relationship('Espacio', foreign_keys=[espacio_id])
-    dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'), nullable=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'),
+                               nullable=True)
     tipo_evento = db.Column(db.String(20), default='entrada')
     metodo = db.Column(db.String(20), default='rfid')
     autorizado = db.Column(db.Boolean, default=False)
@@ -289,4 +293,20 @@ class RegistroAcceso(db.Model):
     tiempo_permanencia_minutos = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
-        return f'<RegistroAcceso {self.id} - {self.uid_tarjeta}>'
+        return f'<RegistroAcceso {self.id}>'
+
+
+# ── Inventario ─────────────────────────────────────────────────────────────────
+
+class InventarioScan(db.Model):
+    __tablename__ = 'inventario_scans'
+    id = db.Column(db.Integer, primary_key=True)
+    recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=False)
+    operador_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    operador = db.relationship('User', foreign_keys=[operador_id])
+    fecha_scan = db.Column(db.DateTime, default=datetime.utcnow)
+    observacion = db.Column(db.Text)
+    sesion_inventario = db.Column(db.String(50))  # ID de sesión para agrupar escaneos
+
+    def __repr__(self):
+        return f'<InventarioScan recurso={self.recurso_id}>'

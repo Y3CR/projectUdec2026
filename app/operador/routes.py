@@ -1,10 +1,14 @@
+from flask import (render_template, redirect, url_for, flash,
+                   request, jsonify, send_file)
 from flask import render_template, redirect, url_for, flash, request, current_app
+from datetime import datetime
+import io
 from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.operador import bp
 from app.models import (Espacio, TipoEspacio, Recurso, CategoriaRecurso,
-                        DispositivoRFID, PermisoAcceso, HorarioGlobal, User)
+                        DispositivoRFID, PermisoAcceso, HorarioGlobal, User, InventarioScan)
 
 
 def operador_required(f):
@@ -211,7 +215,7 @@ def nuevo_recurso():
     categorias = CategoriaRecurso.query.all()
     estados = ['disponible', 'prestado', 'mantenimiento', 'dañado', 'dado_de_baja']
     if request.method == 'POST':
-        nombre = request.form.get('nombre', '').strip()
+        nombre = request.form.get('nombre', '').strip()     
         serial = request.form.get('serial', '').strip().upper()
         codigo_interno = request.form.get('codigo_interno', '').strip().upper()
         categoria_id = request.form.get('categoria_id', type=int)
@@ -235,8 +239,8 @@ def nuevo_recurso():
             return render_template('operador/recurso_form.html', categorias=categorias,
                                    estados=estados, accion='Registrar', data=request.form)
 
-        recurso = Recurso(nombre=nombre, serial=serial, codigo_interno=codigo_interno,
-                          categoria_id=categoria_id, descripcion=descripcion, estado=estado)
+        recurso = Recurso(nombre=nombre,codigo=codigo_interno, serial=serial, codigo_interno=codigo_interno,
+                  categoria_id=categoria_id, descripcion=descripcion, estado=estado)
         db.session.add(recurso)
         db.session.commit()
         flash(f'Recurso "{nombre}" registrado exitosamente.', 'success')
@@ -281,6 +285,7 @@ def editar_recurso(recurso_id):
                                    estados=estados, accion='Editar', data=request.form, recurso=recurso)
 
         recurso.nombre = nombre
+        recurso.codigo=codigo_interno
         recurso.serial = serial
         recurso.codigo_interno = codigo_interno
         recurso.categoria_id = categoria_id
@@ -732,6 +737,166 @@ def asignar_tarjeta(user_id):
         return redirect(url_for('operador.usuarios_tarjetas'))
 
     return render_template('admin/asignar_tarjeta.html', usuario=usuario)
+
+
+        # ════════════════════════════════════════════════════════════════════════════════
+    # SCANNER QR — Panel de verificación
+    # ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/scanner')
+@login_required
+@operador_required
+def scanner_qr():
+    """Panel con cámara para escanear QR de usuarios, comprobantes y devoluciones."""
+    return render_template('operador/scanner_qr.html')
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# INVENTARIO
+# ════════════════════════════════════════════════════════════════════════════════
+
+@bp.route('/inventario')
+@login_required
+@operador_required
+def inventario():
+    """Panel de inventario con escaneo de códigos de barras."""
+    from app.models import InventarioScan
+    import uuid
+
+    # Sesión de inventario actual (del día o nueva)
+    sesion = request.args.get('sesion', '')
+    if not sesion:
+        sesion = f"INV-{datetime.utcnow().strftime('%Y%m%d')}"
+
+    # Recursos escaneados en esta sesión
+    scans_sesion = InventarioScan.query.filter_by(
+        sesion_inventario=sesion
+    ).order_by(InventarioScan.fecha_scan.desc()).all()
+
+    ids_escaneados = {s.recurso_id for s in scans_sesion}
+
+    # Todos los recursos para comparar
+    todos_recursos = Recurso.query.order_by(Recurso.nombre).all()
+
+    # Historial de sesiones
+    sesiones = db.session.query(
+        InventarioScan.sesion_inventario,
+        db.func.count(InventarioScan.id).label('total'),
+        db.func.max(InventarioScan.fecha_scan).label('fecha')
+    ).group_by(InventarioScan.sesion_inventario).order_by(
+        db.func.max(InventarioScan.fecha_scan).desc()
+    ).limit(10).all()
+
+    return render_template('operador/inventario.html',
+                        sesion=sesion,
+                        scans_sesion=scans_sesion,
+                        ids_escaneados=ids_escaneados,
+                        todos_recursos=todos_recursos,
+                        sesiones=sesiones)
+
+
+@bp.route('/inventario/scan', methods=['POST'])
+@login_required
+@operador_required
+def inventario_scan():
+    """Registra un escaneo de código de barras en el inventario."""
+    from app.models import InventarioScan
+    import pytz
+
+    BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+    data = request.get_json(silent=True) or {}
+    serial = data.get('serial', '').strip().upper()
+    sesion = data.get('sesion', '').strip()
+    observacion = data.get('observacion', '').strip()
+
+    if not serial:
+        return jsonify({'ok': False, 'error': 'Serial vacío'}), 400
+
+    recurso = Recurso.query.filter_by(serial=serial).first()
+    if not recurso:
+        return jsonify({
+            'ok': False,
+            'error': f'Serial {serial} no encontrado en el sistema'
+        }), 404
+
+    # Verificar si ya fue escaneado en esta sesión
+    ya_escaneado = InventarioScan.query.filter_by(
+        recurso_id=recurso.id,
+        sesion_inventario=sesion
+    ).first()
+
+    if ya_escaneado:
+        return jsonify({
+            'ok': True,
+            'duplicado': True,
+            'mensaje': f'{recurso.nombre} ya fue escaneado en esta sesión',
+            'recurso': {
+                'id': recurso.id,
+                'nombre': recurso.nombre,
+                'serial': recurso.serial,
+                'codigo_interno': recurso.codigo_interno,
+                'estado': recurso.estado,
+                'categoria': recurso.categoria.nombre
+            }
+        })
+
+    scan = InventarioScan(
+        recurso_id=recurso.id,
+        operador_id=current_user.id,
+        fecha_scan=datetime.now(BOGOTA_TZ).replace(tzinfo=None),
+        observacion=observacion or None,
+        sesion_inventario=sesion
+    )
+    db.session.add(scan)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'duplicado': False,
+        'mensaje': f'✅ {recurso.nombre} registrado en inventario',
+        'recurso': {
+            'id': recurso.id,
+            'nombre': recurso.nombre,
+            'serial': recurso.serial,
+            'codigo_interno': recurso.codigo_interno,
+            'estado': recurso.estado,
+            'categoria': recurso.categoria.nombre
+        }
+    })
+
+
+# ── Etiqueta con QR y código de barras ────────────────────────────────────────
+
+@bp.route('/recursos/<int:recurso_id>/etiqueta')
+@login_required
+@operador_required
+def etiqueta_recurso(recurso_id):
+    recurso = Recurso.query.get_or_404(recurso_id)
+    return render_template('operador/etiqueta_recurso.html', recurso=recurso)
+
+
+@bp.route('/recursos/<int:recurso_id>/qr.png')
+@login_required
+@operador_required
+def recurso_qr_imagen(recurso_id):
+    import qrcode
+    from flask import send_file, request as req
+    recurso = Recurso.query.get_or_404(recurso_id)
+    base_url = req.host_url.rstrip('/')
+    url = f"{base_url}/prestamos/solicitar?tipo=recurso&recurso_id={recurso.id}"
+
+    qr = qrcode.QRCode(version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='#1b4332', back_color='white')
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png',
+                    download_name=f'qr_{recurso.codigo_interno}.png')
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

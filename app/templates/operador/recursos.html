@@ -9,8 +9,13 @@
         </h2>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('operador.categorias_recurso') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('operador.categorias_recurso') }}"
+           class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-tags me-1"></i>Categorías
+        </a>
+        <a href="{{ url_for('operador.inventario') }}"
+           class="btn btn-outline-info btn-sm">
+            <i class="bi bi-upc-scan me-1"></i>Inventario
         </a>
         <a href="{{ url_for('operador.nuevo_recurso') }}" class="btn btn-ucundi">
             <i class="bi bi-plus-lg me-1"></i>Nuevo recurso
@@ -31,7 +36,8 @@
                 <select class="form-select form-select-sm" name="categoria">
                     <option value="0">Todas las categorías</option>
                     {% for cat in categorias %}
-                    <option value="{{ cat.id }}" {% if categoria_filtro == cat.id %}selected{% endif %}>
+                    <option value="{{ cat.id }}"
+                        {% if categoria_filtro == cat.id %}selected{% endif %}>
                         {{ cat.nombre }}
                     </option>
                     {% endfor %}
@@ -41,7 +47,8 @@
                 <select class="form-select form-select-sm" name="estado">
                     <option value="">Todos los estados</option>
                     {% for est in estados %}
-                    <option value="{{ est }}" {% if estado_filtro == est %}selected{% endif %}>
+                    <option value="{{ est }}"
+                        {% if estado_filtro == est %}selected{% endif %}>
                         {{ est | replace('_', ' ') | capitalize }}
                     </option>
                     {% endfor %}
@@ -51,7 +58,8 @@
                 <button class="btn btn-outline-secondary btn-sm" type="submit">
                     <i class="bi bi-search"></i>
                 </button>
-                <a href="{{ url_for('operador.recursos') }}" class="btn btn-outline-danger btn-sm">
+                <a href="{{ url_for('operador.recursos') }}"
+                   class="btn btn-outline-danger btn-sm">
                     <i class="bi bi-x"></i>
                 </a>
             </div>
@@ -76,34 +84,73 @@
                 <tbody>
                     {% for recurso in recursos.items %}
                     <tr>
-                        <td class="ps-3"><strong>{{ recurso.nombre }}</strong></td>
-                        <td><code class="small">{{ recurso.serial }}</code></td>
-                        <td><code class="small">{{ recurso.codigo_interno }}</code></td>
+                        <td class="ps-3">
+                            <strong>{{ recurso.nombre }}</strong>
+                        </td>
+                        <td>
+                            <code class="small">{{ recurso.serial or '—' }}</code>
+                        </td>
+                        <td>
+                            <code class="small">{{ recurso.codigo_interno or '—' }}</code>
+                        </td>
                         <td class="text-muted small">{{ recurso.categoria.nombre }}</td>
                         <td class="text-center">
                             {% if recurso.estado == 'disponible' %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">Disponible</span>
+                            <span class="badge bg-success-subtle text-success
+                                         border border-success-subtle">
+                                Disponible
+                            </span>
                             {% elif recurso.estado == 'prestado' %}
-                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Prestado</span>
+                            <span class="badge bg-primary-subtle text-primary
+                                         border border-primary-subtle">
+                                Prestado
+                            </span>
+                            {% elif recurso.estado == 'reservado' %}
+                            <span class="badge bg-warning-subtle text-warning
+                                         border border-warning-subtle">
+                                Reservado
+                            </span>
                             {% elif recurso.estado == 'mantenimiento' %}
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Mantenimiento</span>
+                            <span class="badge bg-warning-subtle text-warning
+                                         border border-warning-subtle">
+                                Mantenimiento
+                            </span>
                             {% elif recurso.estado == 'dañado' %}
-                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Dañado</span>
+                            <span class="badge bg-danger-subtle text-danger
+                                         border border-danger-subtle">
+                                Dañado
+                            </span>
                             {% else %}
-                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Dado de baja</span>
+                            <span class="badge bg-secondary-subtle text-secondary
+                                         border border-secondary-subtle">
+                                {{ recurso.estado | replace('_', ' ') | capitalize }}
+                            </span>
                             {% endif %}
                         </td>
                         <td class="text-center">
+                            <!-- Etiqueta QR + código de barras -->
+                            <a href="{{ url_for('operador.etiqueta_recurso', recurso_id=recurso.id) }}"
+                               class="btn btn-sm btn-outline-success me-1"
+                               title="Imprimir etiqueta QR y código de barras"
+                               target="_blank">
+                                <i class="bi bi-qr-code"></i>
+                            </a>
+                            <!-- Editar -->
                             <a href="{{ url_for('operador.editar_recurso', recurso_id=recurso.id) }}"
-                               class="btn btn-sm btn-outline-primary me-1">
+                               class="btn btn-sm btn-outline-primary me-1"
+                               title="Editar recurso">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            <!-- Eliminar -->
                             <form method="POST"
                                   action="{{ url_for('operador.eliminar_recurso', recurso_id=recurso.id) }}"
                                   class="d-inline"
                                   onsubmit="return confirm('¿Eliminar el recurso {{ recurso.nombre }}?')">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <input type="hidden" name="csrf_token"
+                                       value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="btn btn-sm btn-outline-danger"
+                                        title="Eliminar recurso">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>
@@ -127,25 +174,33 @@
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
         <li class="page-item {% if not recursos.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('operador.recursos', page=recursos.prev_num, q=busqueda) }}">
+            <a class="page-link"
+               href="{{ url_for('operador.recursos', page=recursos.prev_num, q=busqueda) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
         {% for p in recursos.iter_pages() %}
             {% if p %}
             <li class="page-item {% if p == recursos.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('operador.recursos', page=p, q=busqueda) }}">{{ p }}</a>
+                <a class="page-link"
+                   href="{{ url_for('operador.recursos', page=p, q=busqueda) }}">
+                    {{ p }}
+                </a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
         {% endfor %}
         <li class="page-item {% if not recursos.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('operador.recursos', page=recursos.next_num, q=busqueda) }}">
+            <a class="page-link"
+               href="{{ url_for('operador.recursos', page=recursos.next_num, q=busqueda) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
     </ul>
+    <p class="text-center text-muted small">
+        {{ recursos.total }} recursos en total
+    </p>
 </nav>
 {% endif %}
 {% endblock %}

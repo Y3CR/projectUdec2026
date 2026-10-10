@@ -1,12 +1,14 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify, send_file
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from functools import wraps
 import json
+import io
 import pytz
 from app import db
 from app.prestamos import bp
-from app.models import Solicitud, Espacio, Recurso, User, DispositivoRFID, PermisoAcceso
+from app.models import (Solicitud, Espacio, Recurso, User,
+                        DispositivoRFID, PermisoAcceso)
 
 BOGOTA_TZ = pytz.timezone('America/Bogota')
 
@@ -20,7 +22,8 @@ def usuario_regular_required(f):
     def decorated(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
-        if current_user.get_role_name() not in ['docente', 'estudiante', 'invitado', 'administrador']:
+        if current_user.get_role_name() not in ['docente', 'estudiante',
+                                                  'invitado', 'administrador']:
             flash('Acceso denegado.', 'danger')
             return redirect(url_for('admin.dashboard'))
         return f(*args, **kwargs)
@@ -39,39 +42,33 @@ def operador_required(f):
     return decorated
 
 
-# ── Solicitar acceso RFID o recurso ───────────────────────────────────────────
+# ── Solicitar ──────────────────────────────────────────────────────────────────
 
 @bp.route('/solicitar', methods=['GET', 'POST'])
 @login_required
 @usuario_regular_required
 def solicitar():
-    recursos = Recurso.query.filter(Recurso.cantidad_disponible > 0).all()
+    recursos = Recurso.query.filter_by(estado='disponible').all()
     dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
 
     if request.method == 'POST':
         tipo = request.form.get('tipo', '')
 
         if tipo == 'rfid':
-            # UID viene del usuario, no de un campo manual
             uid_tarjeta = current_user.uid_tarjeta
             dispositivos_ids = request.form.getlist('dispositivos_ids')
             motivo = request.form.get('motivo', '').strip()
 
-            errores = []
             if not uid_tarjeta:
-                flash('No tienes una tarjeta RFID asignada. Acércate a administración.', 'warning')
+                flash('No tienes tarjeta RFID asignada.', 'warning')
                 return redirect(url_for('prestamos.solicitar'))
             if not dispositivos_ids:
-                errores.append('Debes seleccionar al menos un dispositivo RFID.')
-
-            if errores:
-                for e in errores:
-                    flash(e, 'danger')
+                flash('Debes seleccionar al menos un dispositivo.', 'danger')
                 return render_template('prestamos/solicitar.html',
-                                        recursos=recursos, dispositivos=dispositivos,
-                                        data=request.form)
+                                       recursos=recursos,
+                                       dispositivos=dispositivos,
+                                       data=request.form)
 
-            # Verificar que no tenga ya permiso activo
             for did in dispositivos_ids:
                 existente = PermisoAcceso.query.filter_by(
                     usuario_id=current_user.id,
@@ -82,8 +79,9 @@ def solicitar():
                     disp = DispositivoRFID.query.get(int(did))
                     flash(f'Ya tienes acceso activo al dispositivo {disp.nombre}.', 'warning')
                     return render_template('prestamos/solicitar.html',
-                                            recursos=recursos, dispositivos=dispositivos,
-                                            data=request.form)
+                                           recursos=recursos,
+                                           dispositivos=dispositivos,
+                                           data=request.form)
 
             solicitud = Solicitud(
                 usuario_id=current_user.id,
@@ -96,52 +94,50 @@ def solicitar():
             db.session.add(solicitud)
             db.session.commit()
             _notificar_nueva_solicitud(solicitud)
-            flash('Solicitud de acceso RFID enviada. Pendiente de aprobación.', 'success')
+            flash('Solicitud de acceso RFID enviada.', 'success')
             return redirect(url_for('prestamos.mis_solicitudes'))
-
 
         elif tipo == 'recurso':
             recurso_id = request.form.get('recurso_id', type=int)
-            fecha_inicio_str = request.form.get('fecha_inicio', '')
+            # Solo fecha_fin: cuándo planea devolver
             fecha_fin_str = request.form.get('fecha_fin', '')
             motivo = request.form.get('motivo', '').strip()
 
             errores = []
             if not recurso_id:
                 errores.append('Debes seleccionar un recurso.')
-            fecha_inicio = fecha_fin = None
-            if fecha_inicio_str and fecha_fin_str:
+
+            fecha_fin = None
+            if fecha_fin_str:
                 try:
-                    fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%dT%H:%M')
                     fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%dT%H:%M')
-                    if fecha_inicio >= fecha_fin:
-                        errores.append('La fecha de fin debe ser posterior a la de inicio.')
-                    if fecha_inicio < ahora_bogota() - timedelta(minutes=5):
-                        errores.append('La fecha de inicio no puede ser en el pasado.')
+                    if fecha_fin <= ahora_bogota():
+                        errores.append('La fecha de devolución debe ser futura.')
                 except ValueError:
                     errores.append('Formato de fecha inválido.')
             else:
-                errores.append('Las fechas son obligatorias para recursos.')
+                errores.append('La fecha estimada de devolución es obligatoria.')
 
             if errores:
                 for e in errores:
                     flash(e, 'danger')
                 return render_template('prestamos/solicitar.html',
-                                       recursos=recursos, dispositivos=dispositivos,
+                                       recursos=recursos,
+                                       dispositivos=dispositivos,
                                        data=request.form)
 
             recurso = Recurso.query.get(recurso_id)
-            if not recurso or recurso.cantidad_disponible <= 0:
+            if not recurso or not recurso.esta_disponible():
                 flash('El recurso seleccionado no está disponible.', 'danger')
                 return render_template('prestamos/solicitar.html',
-                                       recursos=recursos, dispositivos=dispositivos,
+                                       recursos=recursos,
+                                       dispositivos=dispositivos,
                                        data=request.form)
 
             solicitud = Solicitud(
                 usuario_id=current_user.id,
                 tipo='recurso',
                 recurso_id=recurso_id,
-                fecha_inicio=fecha_inicio,
                 fecha_fin=fecha_fin,
                 motivo=motivo,
                 estado='pendiente'
@@ -149,14 +145,16 @@ def solicitar():
             db.session.add(solicitud)
             db.session.commit()
             _notificar_nueva_solicitud(solicitud)
-            flash('Solicitud de recurso enviada. Pendiente de aprobación.', 'success')
+            flash('Solicitud enviada. Pendiente de aprobación.', 'success')
             return redirect(url_for('prestamos.mis_solicitudes'))
 
         else:
             flash('Tipo de solicitud inválido.', 'danger')
 
     return render_template('prestamos/solicitar.html',
-                           recursos=recursos, dispositivos=dispositivos, data={})
+                           recursos=recursos,
+                           dispositivos=dispositivos,
+                           data={})
 
 
 # ── Mis solicitudes ────────────────────────────────────────────────────────────
@@ -184,7 +182,7 @@ def mis_solicitudes():
                            per_page=per_page)
 
 
-# ── Gestionar solicitudes (operador) ──────────────────────────────────────────
+# ── Gestionar (operador) ───────────────────────────────────────────────────────
 
 @bp.route('/gestionar')
 @login_required
@@ -218,20 +216,17 @@ def gestionar():
 @operador_required
 def aprobar(solicitud_id):
     solicitud = Solicitud.query.get_or_404(solicitud_id)
-
     if solicitud.estado != 'pendiente':
         flash('Solo se pueden aprobar solicitudes pendientes.', 'warning')
         return redirect(url_for('prestamos.gestionar'))
 
     if solicitud.tipo == 'rfid':
-        # Crear PermisoAcceso automáticamente para cada dispositivo solicitado
         dispositivos_ids = solicitud.get_dispositivos_ids()
         permisos_creados = []
         for did in dispositivos_ids:
             dispositivo = DispositivoRFID.query.get(did)
             if not dispositivo:
                 continue
-            # Evitar duplicados
             existente = PermisoAcceso.query.filter_by(
                 uid_tarjeta=solicitud.uid_tarjeta,
                 dispositivo_id=did,
@@ -253,21 +248,22 @@ def aprobar(solicitud_id):
         db.session.commit()
         _notificar_resultado(solicitud)
         flash(f'Solicitud #{solicitud.id} aprobada. '
-              f'Permisos creados para: {", ".join(permisos_creados) if permisos_creados else "ninguno nuevo"}.', 'success')
+              f'Permisos: {", ".join(permisos_creados) if permisos_creados else "ya existían"}.', 'success')
 
     elif solicitud.tipo == 'recurso':
-        if solicitud.recurso:
-            if solicitud.recurso.estado != 'disponible':
-                flash('No se puede aprobar: el recurso no está disponible.', 'danger')
-                return redirect(url_for('prestamos.gestionar'))
-            solicitud.recurso.estado = 'prestado'
+        if not solicitud.recurso or not solicitud.recurso.esta_disponible():
+            flash('El recurso no está disponible.', 'danger')
+            return redirect(url_for('prestamos.gestionar'))
 
+        # Al aprobar un recurso pasa a "aprobada" esperando entrega física
+        solicitud.recurso.estado = 'reservado'
         solicitud.estado = 'aprobada'
         solicitud.operador_id = current_user.id
         solicitud.fecha_gestion = ahora_bogota()
         db.session.commit()
         _notificar_resultado(solicitud)
-        flash(f'Solicitud #{solicitud.id} aprobada.', 'success')
+        flash(f'Solicitud #{solicitud.id} aprobada. '
+              f'Pendiente de entrega física al usuario.', 'success')
 
     return redirect(url_for('prestamos.gestionar'))
 
@@ -277,7 +273,6 @@ def aprobar(solicitud_id):
 @operador_required
 def rechazar(solicitud_id):
     solicitud = Solicitud.query.get_or_404(solicitud_id)
-
     if solicitud.estado != 'pendiente':
         flash('Solo se pueden rechazar solicitudes pendientes.', 'warning')
         return redirect(url_for('prestamos.gestionar'))
@@ -286,6 +281,9 @@ def rechazar(solicitud_id):
     if not motivo_rechazo:
         flash('Debes indicar el motivo del rechazo.', 'danger')
         return redirect(url_for('prestamos.gestionar'))
+
+    if solicitud.tipo == 'recurso' and solicitud.recurso:
+        solicitud.recurso.estado = 'disponible'
 
     solicitud.estado = 'rechazada'
     solicitud.motivo_rechazo = motivo_rechazo
@@ -297,44 +295,26 @@ def rechazar(solicitud_id):
     return redirect(url_for('prestamos.gestionar'))
 
 
-@bp.route('/cancelar/<int:solicitud_id>', methods=['POST'])
+@bp.route('/entregar/<int:solicitud_id>', methods=['POST'])
 @login_required
 @operador_required
-def cancelar(solicitud_id):
+def entregar(solicitud_id):
+    """El operador entrega físicamente el recurso. Aquí empieza el tiempo."""
     solicitud = Solicitud.query.get_or_404(solicitud_id)
-
-    if solicitud.estado not in ['pendiente', 'aprobada']:
-        flash('Solo se pueden cancelar solicitudes pendientes o aprobadas.', 'warning')
+    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
+        flash('Solo se pueden entregar recursos aprobados.', 'warning')
         return redirect(url_for('prestamos.gestionar'))
 
-    motivo = request.form.get('motivo_cancelacion', '').strip()
-    if not motivo:
-        flash('Debes indicar el motivo de la cancelación.', 'danger')
-        return redirect(url_for('prestamos.gestionar'))
-
-    # Si era RFID aprobada, desactivar los permisos creados
-    if solicitud.tipo == 'rfid' and solicitud.estado == 'aprobada':
-        for did in solicitud.get_dispositivos_ids():
-            permiso = PermisoAcceso.query.filter_by(
-                uid_tarjeta=solicitud.uid_tarjeta,
-                dispositivo_id=did,
-                usuario_id=solicitud.usuario_id
-            ).first()
-            if permiso:
-                permiso.activo = False
-
-    # Si era recurso aprobado, devolver unidad
-    if solicitud.tipo == 'recurso' and solicitud.estado == 'aprobada' and solicitud.recurso:
-        solicitud.recurso.cantidad_disponible += 1
-        if solicitud.recurso.cantidad_disponible > 0:
-            solicitud.recurso.estado = 'disponible'
-
-    solicitud.estado = 'rechazada'
-    solicitud.motivo_rechazo = f'[CANCELADA] {motivo}'
-    solicitud.operador_id = current_user.id
-    solicitud.fecha_gestion = ahora_bogota()
+    # La fecha_inicio se registra en este momento
+    solicitud.fecha_inicio = ahora_bogota()
+    solicitud.estado = 'entregado'
+    if solicitud.recurso:
+        solicitud.recurso.estado = 'prestado'
     db.session.commit()
-    flash(f'Solicitud #{solicitud.id} cancelada correctamente.', 'info')
+
+    _notificar_entrega(solicitud)
+    flash(f'Recurso entregado. Tiempo iniciado: '
+          f'{solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M")}.', 'success')
     return redirect(url_for('prestamos.gestionar'))
 
 
@@ -342,10 +322,11 @@ def cancelar(solicitud_id):
 @login_required
 @operador_required
 def devolucion(solicitud_id):
+    """El operador registra la devolución y el tiempo se detiene."""
     solicitud = Solicitud.query.get_or_404(solicitud_id)
 
-    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
-        flash('Solo aplica para recursos aprobados.', 'warning')
+    if solicitud.estado != 'entregado' or solicitud.tipo != 'recurso':
+        flash('Solo aplica para recursos en estado "entregado".', 'warning')
         return redirect(url_for('prestamos.gestionar'))
 
     if request.method == 'POST':
@@ -356,6 +337,7 @@ def devolucion(solicitud_id):
             flash('Selecciona el estado del recurso.', 'danger')
             return render_template('prestamos/devolucion_form.html', solicitud=solicitud)
 
+        # Aquí se detiene el tiempo
         solicitud.fecha_devolucion_real = ahora_bogota()
         solicitud.estado_devolucion = estado_devolucion
         solicitud.novedad_devolucion = novedad or None
@@ -379,6 +361,249 @@ def devolucion(solicitud_id):
     return render_template('prestamos/devolucion_form.html', solicitud=solicitud)
 
 
+@bp.route('/cancelar/<int:solicitud_id>', methods=['POST'])
+@login_required
+@operador_required
+def cancelar(solicitud_id):
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+    if solicitud.estado not in ['pendiente', 'aprobada']:
+        flash('Solo se pueden cancelar solicitudes pendientes o aprobadas.', 'warning')
+        return redirect(url_for('prestamos.gestionar'))
+
+    motivo = request.form.get('motivo_cancelacion', '').strip()
+    if not motivo:
+        flash('Debes indicar el motivo de la cancelación.', 'danger')
+        return redirect(url_for('prestamos.gestionar'))
+
+    if solicitud.tipo == 'rfid' and solicitud.estado == 'aprobada':
+        for did in solicitud.get_dispositivos_ids():
+            permiso = PermisoAcceso.query.filter_by(
+                uid_tarjeta=solicitud.uid_tarjeta,
+                dispositivo_id=did,
+                usuario_id=solicitud.usuario_id
+            ).first()
+            if permiso:
+                permiso.activo = False
+
+    if solicitud.tipo == 'recurso' and solicitud.recurso:
+        solicitud.recurso.estado = 'disponible'
+
+    solicitud.estado = 'rechazada'
+    solicitud.motivo_rechazo = f'[CANCELADA] {motivo}'
+    solicitud.operador_id = current_user.id
+    solicitud.fecha_gestion = ahora_bogota()
+    db.session.commit()
+    flash(f'Solicitud #{solicitud.id} cancelada.', 'info')
+    return redirect(url_for('prestamos.gestionar'))
+
+
+# ── Mis recursos en uso ────────────────────────────────────────────────────────
+
+@bp.route('/mis-recursos')
+@login_required
+@usuario_regular_required
+def mis_recursos():
+    recursos_activos = Solicitud.query.filter_by(
+        usuario_id=current_user.id,
+        tipo='recurso',
+        estado='entregado'
+    ).order_by(Solicitud.fecha_inicio.desc()).all()
+    return render_template('prestamos/mis_recursos.html',
+                           recursos_activos=recursos_activos,
+                           ahora=ahora_bogota())
+
+
+@bp.route('/extender/<int:solicitud_id>', methods=['GET', 'POST'])
+@login_required
+@usuario_regular_required
+def extender_plazo(solicitud_id):
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+    if solicitud.usuario_id != current_user.id:
+        flash('No tienes permiso.', 'danger')
+        return redirect(url_for('prestamos.mis_recursos'))
+    if solicitud.estado != 'entregado' or solicitud.tipo != 'recurso':
+        flash('Solo puedes extender recursos en uso.', 'warning')
+        return redirect(url_for('prestamos.mis_recursos'))
+
+    if request.method == 'POST':
+        nueva_fecha_str = request.form.get('nueva_fecha_fin', '')
+        try:
+            nueva_fecha = datetime.strptime(nueva_fecha_str, '%Y-%m-%dT%H:%M')
+            fecha_actual = solicitud.fecha_fin_efectiva()
+            if fecha_actual and nueva_fecha <= fecha_actual:
+                flash('La nueva fecha debe ser posterior a la actual.', 'danger')
+                return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
+            solicitud.fecha_fin_extendida = nueva_fecha
+            db.session.commit()
+            flash(f'Plazo extendido hasta '
+                  f'{nueva_fecha.strftime("%d/%m/%Y %H:%M")}.', 'success')
+            return redirect(url_for('prestamos.mis_recursos'))
+        except ValueError:
+            flash('Formato de fecha inválido.', 'danger')
+
+    return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
+
+
+# ── QR personal del usuario ────────────────────────────────────────────────────
+
+@bp.route('/qr-personal')
+@login_required
+def qr_personal():
+    """Muestra el QR personal del usuario con su historial."""
+    return render_template('prestamos/qr_personal.html',
+                           usuario=current_user)
+
+
+@bp.route('/qr-personal/imagen')
+@login_required
+def qr_personal_imagen():
+    """Genera la imagen PNG del QR personal."""
+    import qrcode
+    from flask import request as req
+
+    base_url = req.host_url.rstrip('/')
+    url = f"{base_url}/prestamos/perfil-publico/{current_user.id}"
+
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='#1b4332', back_color='white')
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return send_file(buffer, mimetype='image/png',
+                     download_name=f'qr_{current_user.id}.png')
+
+
+@bp.route('/perfil-publico/<int:user_id>')
+@login_required
+def perfil_publico(user_id):
+    """
+    Página que se abre al escanear el QR personal.
+    Muestra nombre, rol e historial de préstamos.
+    Accesible para operadores y el propio usuario.
+    """
+    if (current_user.get_role_name() not in ['operador', 'administrador']
+            and current_user.id != user_id):
+        flash('Acceso denegado.', 'danger')
+        return redirect(url_for('admin.dashboard'))
+
+    usuario = User.query.get_or_404(user_id)
+
+    activos = Solicitud.query.filter_by(
+        usuario_id=user_id, tipo='recurso', estado='entregado'
+    ).order_by(Solicitud.fecha_inicio.desc()).all()
+
+    aprobados_rfid = Solicitud.query.filter_by(
+        usuario_id=user_id, tipo='rfid', estado='aprobada'
+    ).order_by(Solicitud.fecha_creacion.desc()).all()
+
+    devueltos = Solicitud.query.filter_by(
+        usuario_id=user_id, tipo='recurso', estado='devuelta'
+    ).order_by(Solicitud.fecha_devolucion_real.desc()).limit(10).all()
+
+    rechazados = Solicitud.query.filter(
+        Solicitud.usuario_id == user_id,
+        Solicitud.estado == 'rechazada'
+    ).order_by(Solicitud.fecha_creacion.desc()).limit(5).all()
+
+    return render_template('prestamos/perfil_publico.html',
+                           usuario=usuario,
+                           activos=activos,
+                           aprobados_rfid=aprobados_rfid,
+                           devueltos=devueltos,
+                           rechazados=rechazados)
+
+
+# ── QR de comprobante (operador escanea para entregar) ─────────────────────────
+
+@bp.route('/comprobante/<int:solicitud_id>/imagen')
+@login_required
+def comprobante_qr_imagen(solicitud_id):
+    """QR que al escanearse lleva al operador a confirmar la entrega."""
+    import qrcode
+    from flask import request as req
+
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+    if solicitud.usuario_id != current_user.id and \
+       current_user.get_role_name() not in ['operador', 'administrador']:
+        flash('Acceso denegado.', 'danger')
+        return redirect(url_for('admin.dashboard'))
+
+    base_url = req.host_url.rstrip('/')
+    url = f"{base_url}/prestamos/confirmar-entrega/{solicitud_id}"
+
+    qr = qrcode.QRCode(version=1,
+                       error_correction=qrcode.constants.ERROR_CORRECT_H,
+                       box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='#1b4332', back_color='white')
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return send_file(buffer, mimetype='image/png',
+                     download_name=f'comprobante_{solicitud_id}.png')
+
+
+@bp.route('/confirmar-entrega/<int:solicitud_id>', methods=['GET', 'POST'])
+@login_required
+@operador_required
+def confirmar_entrega_qr(solicitud_id):
+    """El operador escanea el QR de comprobante y confirma la entrega."""
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+
+    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
+        flash('Esta solicitud no está en estado de entrega.', 'warning')
+        return redirect(url_for('prestamos.gestionar'))
+
+    if request.method == 'POST':
+        solicitud.fecha_inicio = ahora_bogota()
+        solicitud.estado = 'entregado'
+        if solicitud.recurso:
+            solicitud.recurso.estado = 'prestado'
+        db.session.commit()
+        _notificar_entrega(solicitud)
+        flash(f'✅ Entrega confirmada vía QR. '
+              f'Recurso: {solicitud.get_item_nombre()}. '
+              f'Inicio: {solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M")}.', 'success')
+        return redirect(url_for('prestamos.gestionar'))
+
+    return render_template('prestamos/confirmar_entrega.html', solicitud=solicitud)
+
+
+# ── QR de devolución (operador escanea para recibir) ──────────────────────────
+
+@bp.route('/devolucion-qr/<int:solicitud_id>/imagen')
+@login_required
+@operador_required
+def devolucion_qr_imagen(solicitud_id):
+    """QR que al escanearse lleva al formulario de devolución."""
+    import qrcode
+    from flask import request as req
+
+    solicitud = Solicitud.query.get_or_404(solicitud_id)
+    base_url = req.host_url.rstrip('/')
+    url = f"{base_url}/prestamos/devolucion/{solicitud_id}"
+
+    qr = qrcode.QRCode(version=1,
+                       error_correction=qrcode.constants.ERROR_CORRECT_H,
+                       box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='#c0392b', back_color='white')
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    return send_file(buffer, mimetype='image/png',
+                     download_name=f'devolucion_{solicitud_id}.png')
+
+
 # ── Notificaciones ─────────────────────────────────────────────────────────────
 
 def _notificar_nueva_solicitud(solicitud):
@@ -390,7 +615,6 @@ def _notificar_nueva_solicitud(solicitud):
             recipients=[solicitud.usuario.email],
             body=(f'Hola {solicitud.usuario.nombre},\n\n'
                   f'Tu solicitud #{solicitud.id} fue recibida y está pendiente.\n\n'
-                  f'Tipo: {solicitud.tipo.upper()}\n'
                   f'Sistema de Préstamos — UCundinamarca')
         )
         mail.send(msg)
@@ -403,134 +627,54 @@ def _notificar_resultado(solicitud):
         from flask_mail import Message
         from app import mail
         usuario = solicitud.usuario
-
         if solicitud.estado == 'aprobada':
             if solicitud.tipo == 'rfid':
                 asunto = f'✅ Acceso RFID aprobado — UCundinamarca'
                 cuerpo = (
                     f'Hola {usuario.nombre},\n\n'
-                    f'Tu solicitud #{solicitud.id} de acceso RFID fue APROBADA.\n\n'
-                    f'Tu tarjeta {solicitud.uid_tarjeta} ha sido registrada en los '
-                    f'dispositivos solicitados. Ya puedes acceder a los espacios autorizados.\n\n'
+                    f'Tu solicitud #{solicitud.id} de acceso RFID fue APROBADA.\n'
+                    f'Tu tarjeta {solicitud.uid_tarjeta} ha sido registrada.\n\n'
                     f'Sistema de Préstamos — UCundinamarca'
                 )
             else:
+                asunto = f'✅ Solicitud #{solicitud.id} aprobada — Pasa a recoger'
                 cuerpo = (
                     f'Hola {usuario.nombre},\n\n'
-                    f'Tu solicitud #{solicitud.id} de recurso fue APROBADA.\n\n'
+                    f'Tu solicitud #{solicitud.id} fue APROBADA.\n\n'
                     f'Recurso: {solicitud.get_item_nombre()}\n'
-                    f'Desde: {solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_inicio else "—"}\n'
-                    f'Hasta: {solicitud.fecha_fin.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin else "—"}\n\n'
-                    f'Por favor acércate a la administración a recoger el recurso '
-                    f'en el horario indicado. Presenta tu carné institucional.\n\n'
+                    f'Devolución estimada: '
+                    f'{solicitud.fecha_fin.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin else "—"}\n\n'
+                    f'Acércate a la administración con tu QR de comprobante '
+                    f'para retirar el recurso.\n\n'
                     f'Sistema de Préstamos — UCundinamarca'
                 )
-                asunto = f'✅ Solicitud #{solicitud.id} aprobada — Pasa a recoger tu recurso'
         else:
             asunto = f'❌ Solicitud #{solicitud.id} rechazada — UCundinamarca'
             cuerpo = (
                 f'Hola {usuario.nombre},\n\n'
-                f'Tu solicitud #{solicitud.id} fue RECHAZADA.\n\n'
+                f'Tu solicitud #{solicitud.id} fue RECHAZADA.\n'
                 f'Motivo: {solicitud.motivo_rechazo}\n\n'
-                f'Si tienes dudas, acércate a la administración.\n\n'
                 f'Sistema de Préstamos — UCundinamarca'
             )
-
         msg = Message(subject=asunto, recipients=[usuario.email], body=cuerpo)
         mail.send(msg)
     except Exception:
         pass
-    
-    
-# ── Recursos en uso del usuario ────────────────────────────────────────────────
-
-@bp.route('/mis-recursos')
-@login_required
-@usuario_regular_required
-def mis_recursos():
-    """Recursos actualmente prestados al usuario."""
-    recursos_activos = Solicitud.query.filter_by(
-        usuario_id=current_user.id,
-        tipo='recurso',
-        estado='aprobada'
-    ).order_by(Solicitud.fecha_inicio.desc()).all()
-    return render_template('prestamos/mis_recursos.html',
-                           recursos_activos=recursos_activos)
 
 
-@bp.route('/entregar/<int:solicitud_id>', methods=['POST'])
-@login_required
-@usuario_regular_required
-def entregar_recurso(solicitud_id):
-    """El usuario entrega el recurso antes del plazo."""
-    solicitud = Solicitud.query.get_or_404(solicitud_id)
-
-    if solicitud.usuario_id != current_user.id:
-        flash('No tienes permiso para esta acción.', 'danger')
-        return redirect(url_for('prestamos.mis_recursos'))
-
-    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
-        flash('Este recurso no puede ser entregado desde aquí.', 'warning')
-        return redirect(url_for('prestamos.mis_recursos'))
-
-    solicitud.estado = 'devuelta'
-    solicitud.fecha_devolucion_real = ahora_bogota()
-    solicitud.calcular_tiempo_uso()
-    if solicitud.recurso:
-        solicitud.recurso.estado = 'disponible'
-    db.session.commit()
-    flash(f'Recurso "{solicitud.get_item_nombre()}" marcado como entregado. '
-          f'Recuerda llevarlo físicamente a la administración.', 'success')
-    return redirect(url_for('prestamos.mis_recursos'))
-
-
-@bp.route('/extender/<int:solicitud_id>', methods=['GET', 'POST'])
-@login_required
-@usuario_regular_required
-def extender_plazo(solicitud_id):
-    """El usuario extiende el plazo de un recurso prestado."""
-    solicitud = Solicitud.query.get_or_404(solicitud_id)
-
-    if solicitud.usuario_id != current_user.id:
-        flash('No tienes permiso para esta acción.', 'danger')
-        return redirect(url_for('prestamos.mis_recursos'))
-
-    if solicitud.estado != 'aprobada' or solicitud.tipo != 'recurso':
-        flash('No puedes extender este préstamo.', 'warning')
-        return redirect(url_for('prestamos.mis_recursos'))
-
-    if request.method == 'POST':
-        nueva_fecha_str = request.form.get('nueva_fecha_fin', '')
-        try:
-            nueva_fecha = datetime.strptime(nueva_fecha_str, '%Y-%m-%dT%H:%M')
-            fecha_actual = solicitud.fecha_fin_extendida or solicitud.fecha_fin
-            if nueva_fecha <= fecha_actual:
-                flash('La nueva fecha debe ser posterior a la fecha de fin actual.', 'danger')
-                return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
-            solicitud.fecha_fin_extendida = nueva_fecha
-            db.session.commit()
-            flash(f'Plazo extendido hasta {nueva_fecha.strftime("%d/%m/%Y %H:%M")}. '
-                  f'El operador será notificado.', 'success')
-            # Notificar al operador
-            _notificar_extension(solicitud)
-            return redirect(url_for('prestamos.mis_recursos'))
-        except ValueError:
-            flash('Formato de fecha inválido.', 'danger')
-
-    return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
-
-
-def _notificar_extension(solicitud):
+def _notificar_entrega(solicitud):
     try:
         from flask_mail import Message
         from app import mail
         msg = Message(
-            subject=f'⏰ Extensión de plazo solicitada — Solicitud #{solicitud.id}',
+            subject=f'📦 Recurso entregado — Solicitud #{solicitud.id}',
             recipients=[solicitud.usuario.email],
             body=(
-                f'El usuario {solicitud.usuario.nombre} {solicitud.usuario.apellido} '
-                f'ha extendido el plazo del recurso "{solicitud.get_item_nombre()}" '
-                f'hasta el {solicitud.fecha_fin_extendida.strftime("%d/%m/%Y %H:%M")}.\n\n'
+                f'Hola {solicitud.usuario.nombre},\n\n'
+                f'El recurso "{solicitud.get_item_nombre()}" fue entregado.\n'
+                f'Inicio: {solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M")}\n'
+                f'Devolución estimada: '
+                f'{solicitud.fecha_fin_efectiva().strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin_efectiva() else "—"}\n\n'
                 f'Sistema de Préstamos — UCundinamarca'
             )
         )

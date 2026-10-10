@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Confirmar Entrega — UCundinamarca{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('prestamos.gestionar') }}"
+               class="btn btn-outline-secondary btn-sm me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-qr-code-scan me-2 text-ucundi"></i>Confirmar Entrega
+            </h2>
+        </div>
+
+        <div class="card border-0 shadow-sm border-success mb-3">
+            <div class="card-body py-3 small">
+                <div class="row g-1">
+                    <div class="col-5 text-muted fw-semibold">Solicitud:</div>
+                    <div class="col-7">#{{ solicitud.id }}</div>
+                    <div class="col-5 text-muted fw-semibold">Usuario:</div>
+                    <div class="col-7 fw-bold">
+                        {{ solicitud.usuario.nombre }} {{ solicitud.usuario.apellido }}
+                    </div>
+                    <div class="col-5 text-muted fw-semibold">Recurso:</div>
+                    <div class="col-7">{{ solicitud.get_item_nombre() }}</div>
+                    {% if solicitud.recurso %}
+                    <div class="col-5 text-muted fw-semibold">Serial:</div>
+                    <div class="col-7">
+                        <code>{{ solicitud.recurso.serial or '—' }}</code>
+                    </div>
+                    {% endif %}
+                    <div class="col-5 text-muted fw-semibold">Dev. estimada:</div>
+                    <div class="col-7">
+                        {{ solicitud.fecha_fin.strftime('%d/%m/%Y %H:%M') if solicitud.fecha_fin else '—' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 text-center">
+                <i class="bi bi-box-arrow-right fs-1 text-success mb-3 d-block"></i>
+                <h5 class="fw-bold mb-2">¿Confirmar entrega del recurso?</h5>
+                <p class="text-muted small mb-4">
+                    Al confirmar, se registrará la fecha y hora actual como inicio
+                    del préstamo y el tiempo comenzará a correr.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button type="submit" class="btn btn-success px-4 fw-semibold">
+                            <i class="bi bi-check-lg me-1"></i>Confirmar entrega
+                        </button>
+                        <a href="{{ url_for('prestamos.gestionar') }}"
+                           class="btn btn-outline-secondary px-4">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

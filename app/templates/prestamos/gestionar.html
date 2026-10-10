@@ -6,23 +6,35 @@
     <h2 class="fw-bold mb-0">
         <i class="bi bi-clipboard-check me-2 text-ucundi"></i>Gestionar Solicitudes
     </h2>
+    <a href="{{ url_for('operador.scanner_qr') }}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-qr-code-scan me-1"></i>Scanner QR
+    </a>
 </div>
 
-<!-- Filtros y paginación -->
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
-            <select class="form-select form-select-sm w-auto" name="estado" onchange="this.form.submit()">
+            <select class="form-select form-select-sm w-auto" name="estado"
+                    onchange="this.form.submit()">
                 <option value="">Todos</option>
-                <option value="pendiente" {% if estado_filtro == 'pendiente' %}selected{% endif %}>Pendiente</option>
-                <option value="aprobada" {% if estado_filtro == 'aprobada' %}selected{% endif %}>Aprobada</option>
-                <option value="rechazada" {% if estado_filtro == 'rechazada' %}selected{% endif %}>Rechazada</option>
-                <option value="devuelta" {% if estado_filtro == 'devuelta' %}selected{% endif %}>Devuelta</option>
+                <option value="pendiente"
+                    {% if estado_filtro == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                <option value="aprobada"
+                    {% if estado_filtro == 'aprobada' %}selected{% endif %}>Aprobada</option>
+                <option value="entregado"
+                    {% if estado_filtro == 'entregado' %}selected{% endif %}>Entregado</option>
+                <option value="devuelta"
+                    {% if estado_filtro == 'devuelta' %}selected{% endif %}>Devuelta</option>
+                <option value="rechazada"
+                    {% if estado_filtro == 'rechazada' %}selected{% endif %}>Rechazada</option>
             </select>
-            <select class="form-select form-select-sm w-auto" name="tipo" onchange="this.form.submit()">
+            <select class="form-select form-select-sm w-auto" name="tipo"
+                    onchange="this.form.submit()">
                 <option value="">Todos los tipos</option>
-                <option value="rfid" {% if tipo_filtro == 'rfid' %}selected{% endif %}>RFID</option>
-                <option value="recurso" {% if tipo_filtro == 'recurso' %}selected{% endif %}>Recurso</option>
+                <option value="rfid"
+                    {% if tipo_filtro == 'rfid' %}selected{% endif %}>RFID</option>
+                <option value="recurso"
+                    {% if tipo_filtro == 'recurso' %}selected{% endif %}>Recurso</option>
             </select>
             <div class="d-flex align-items-center gap-1 ms-auto">
                 <label class="small text-muted mb-0">Mostrar:</label>
@@ -47,7 +59,7 @@
                         <th>Usuario</th>
                         <th>Tipo</th>
                         <th>Detalle</th>
-                        <th>Dispositivos / Recurso</th>
+                        <th>Devolución estimada</th>
                         <th class="text-center">Estado</th>
                         <th class="text-center">Acciones</th>
                     </tr>
@@ -58,15 +70,20 @@
                         <td class="ps-3 text-muted small">{{ s.id }}</td>
                         <td>
                             <strong>{{ s.usuario.nombre }} {{ s.usuario.apellido }}</strong>
-                            <br><span class="text-muted small">{{ s.usuario.get_role_name() | capitalize }}</span>
+                            <br>
+                            <span class="text-muted small">
+                                {{ s.usuario.get_role_name() | capitalize }}
+                            </span>
                         </td>
                         <td>
                             {% if s.tipo == 'rfid' %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                            <span class="badge bg-success-subtle text-success
+                                         border border-success-subtle">
                                 <i class="bi bi-wifi me-1"></i>RFID
                             </span>
                             {% else %}
-                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                            <span class="badge bg-warning-subtle text-warning
+                                         border border-warning-subtle">
                                 <i class="bi bi-laptop me-1"></i>Recurso
                             </span>
                             {% endif %}
@@ -74,49 +91,59 @@
                         <td class="small">
                             {% if s.tipo == 'rfid' %}
                                 Tarjeta: <code>{{ s.uid_tarjeta or '—' }}</code>
-                                {% if s.motivo %}<br><span class="text-muted">{{ s.motivo[:50] }}</span>{% endif %}
                             {% else %}
-                                {{ s.get_item_nombre() }}
+                                <strong>{{ s.get_item_nombre() }}</strong>
+                                {% if s.recurso %}
+                                <br>
+                                <span class="text-muted">{{ s.recurso.codigo_interno or s.recurso.serial or '' }}</span>
+                                {% endif %}
                                 {% if s.fecha_inicio %}
-                                <br><span class="text-muted">{{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M')  if s.fecha_inicio else '—' }} → {{ s.fecha_fin.strftime('%d/%m/%Y %H:%M')  if s.fecha_fin else '—' }}</span>
+                                <br>
+                                <span class="text-muted">
+                                    Entregado: {{ s.fecha_inicio.strftime('%d/%m/%Y %H:%M') }}
+                                </span>
                                 {% endif %}
                             {% endif %}
                         </td>
                         <td class="small">
-                            {% if s.tipo == 'rfid' %}
-                                {% for did in s.get_dispositivos_ids() %}
-                                    {% set d = did | dispositivo %}
-                                    <span class="badge bg-dark me-1 mb-1">
-                                        {{ d.codigo if d else did }}
-                                        {% if d and d.espacio %}<br><small>{{ d.espacio.nombre }}</small>{% endif %}
-                                    </span>
-                                {% endfor %}
-                            {% else %}
-                                {{ s.recurso.nombre if s.recurso else '—' }}
-                            {% endif %}
+                            {% if s.fecha_fin_efectiva() %}
+                                {{ s.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M') }}
+                                {% if s.fecha_fin_extendida %}
+                                <span class="badge bg-info text-dark ms-1">Ext.</span>
+                                {% endif %}
+                            {% else %}—{% endif %}
                         </td>
                         <td class="text-center">
                             {% if s.estado == 'pendiente' %}
                             <span class="badge bg-secondary">Pendiente</span>
                             {% elif s.estado == 'aprobada' %}
-                            <span class="badge bg-success">Aprobada</span>
-                            {% elif s.estado == 'rechazada' %}
-                            <span class="badge bg-danger">Rechazada</span>
+                            <span class="badge bg-primary">Aprobada</span>
+                            {% elif s.estado == 'entregado' %}
+                            <span class="badge bg-success">Entregado</span>
                             {% elif s.estado == 'devuelta' %}
                             <span class="badge bg-info text-dark">Devuelta</span>
+                            {% elif s.estado == 'rechazada' %}
+                            <span class="badge bg-danger">Rechazada</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
+
                             {% if s.estado == 'pendiente' %}
-                            <form method="POST" action="{{ url_for('prestamos.aprobar', solicitud_id=s.id) }}"
-                                  class="d-inline" onsubmit="return confirm('¿Aprobar solicitud #{{ s.id }}?')">
+                            <!-- Aprobar -->
+                            <form method="POST"
+                                  action="{{ url_for('prestamos.aprobar', solicitud_id=s.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('¿Aprobar solicitud #{{ s.id }}?')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm btn-success me-1" title="Aprobar">
+                                <button type="submit" class="btn btn-sm btn-success me-1"
+                                        title="Aprobar">
                                     <i class="bi bi-check-lg"></i>
                                 </button>
                             </form>
+                            <!-- Rechazar -->
                             <button type="button" class="btn btn-sm btn-danger"
-                                    data-bs-toggle="modal" data-bs-target="#modalRechazo{{ s.id }}">
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalRechazo{{ s.id }}">
                                 <i class="bi bi-x-lg"></i>
                             </button>
                             <!-- Modal rechazo -->
@@ -124,66 +151,127 @@
                                 <div class="modal-dialog">
                                     <div class="modal-content">
                                         <div class="modal-header">
-                                            <h5 class="modal-title">Rechazar solicitud #{{ s.id }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            <h5 class="modal-title">
+                                                Rechazar solicitud #{{ s.id }}
+                                            </h5>
+                                            <button type="button" class="btn-close"
+                                                    data-bs-dismiss="modal"></button>
                                         </div>
-                                        <form method="POST" action="{{ url_for('prestamos.rechazar', solicitud_id=s.id) }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <form method="POST"
+                                              action="{{ url_for('prestamos.rechazar', solicitud_id=s.id) }}">
+                                            <input type="hidden" name="csrf_token"
+                                                   value="{{ csrf_token() }}">
                                             <div class="modal-body">
-                                                <textarea class="form-control" name="motivo_rechazo" rows="3"
-                                                    placeholder="Motivo del rechazo..." required></textarea>
+                                                <textarea class="form-control"
+                                                          name="motivo_rechazo" rows="3"
+                                                          placeholder="Motivo..."
+                                                          required></textarea>
                                             </div>
                                             <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-danger btn-sm">Rechazar</button>
+                                                <button type="button"
+                                                        class="btn btn-secondary btn-sm"
+                                                        data-bs-dismiss="modal">
+                                                    Cancelar
+                                                </button>
+                                                <button type="submit"
+                                                        class="btn btn-danger btn-sm">
+                                                    Rechazar
+                                                </button>
                                             </div>
                                         </form>
                                     </div>
                                 </div>
                             </div>
 
-                            {% elif s.estado == 'aprobada' %}
-                            {% if s.tipo == 'recurso' %}
-                            <a href="{{ url_for('prestamos.devolucion', solicitud_id=s.id) }}"
-                               class="btn btn-sm btn-outline-info me-1">
-                                <i class="bi bi-arrow-return-left"></i>
+                            {% elif s.estado == 'aprobada' and s.tipo == 'recurso' %}
+                            <!-- Entregar físicamente (botón directo) -->
+                            <form method="POST"
+                                  action="{{ url_for('prestamos.entregar', solicitud_id=s.id) }}"
+                                  class="d-inline"
+                                  onsubmit="return confirm('¿Confirmar entrega física del recurso?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-success me-1"
+                                        title="Entregar recurso">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Entregar
+                                </button>
+                            </form>
+                            <!-- O escanear QR de comprobante -->
+                            <a href="{{ url_for('prestamos.confirmar_entrega_qr', solicitud_id=s.id) }}"
+                               class="btn btn-sm btn-outline-success me-1"
+                               title="Confirmar entrega vía QR">
+                                <i class="bi bi-qr-code"></i>
                             </a>
-                            {% endif %}
+                            <!-- Cancelar -->
                             <button type="button" class="btn btn-sm btn-outline-warning"
-                                    data-bs-toggle="modal" data-bs-target="#modalCancelar{{ s.id }}">
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalCancelar{{ s.id }}">
                                 <i class="bi bi-slash-circle"></i>
                             </button>
-                            <!-- Modal cancelar -->
-                            <div class="modal fade" id="modalCancelar{{ s.id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title text-warning">Cancelar solicitud #{{ s.id }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form method="POST" action="{{ url_for('prestamos.cancelar', solicitud_id=s.id) }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <div class="modal-body">
-                                                {% if s.tipo == 'rfid' %}
-                                                <div class="alert alert-warning small py-2">
-                                                    Al cancelar se desactivarán los permisos RFID creados.
-                                                </div>
-                                                {% endif %}
-                                                <textarea class="form-control" name="motivo_cancelacion" rows="3"
-                                                    placeholder="Motivo de la cancelación..." required></textarea>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-                                                <button type="submit" class="btn btn-warning btn-sm">Confirmar</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
+
+                            {% elif s.estado == 'entregado' and s.tipo == 'recurso' %}
+                            <!-- Devolución -->
+                            <a href="{{ url_for('prestamos.devolucion', solicitud_id=s.id) }}"
+                               class="btn btn-sm btn-outline-info me-1"
+                               title="Registrar devolución">
+                                <i class="bi bi-arrow-return-left me-1"></i>Devolver
+                            </a>
+                            <!-- QR devolución para imprimir/mostrar -->
+                            <a href="{{ url_for('prestamos.devolucion_qr_imagen', solicitud_id=s.id) }}"
+                               class="btn btn-sm btn-outline-secondary"
+                               title="QR de devolución" target="_blank">
+                                <i class="bi bi-qr-code"></i>
+                            </a>
+
+                            {% elif s.estado == 'aprobada' and s.tipo == 'rfid' %}
+                            <!-- Cancelar RFID aprobado -->
+                            <button type="button" class="btn btn-sm btn-outline-warning"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalCancelar{{ s.id }}">
+                                <i class="bi bi-slash-circle"></i>
+                            </button>
 
                             {% else %}
                             <span class="text-muted small">—</span>
                             {% endif %}
+
+                            <!-- Modal cancelar (común) -->
+                            {% if s.estado in ['aprobada'] %}
+                            <div class="modal fade" id="modalCancelar{{ s.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title text-warning">
+                                                Cancelar solicitud #{{ s.id }}
+                                            </h5>
+                                            <button type="button" class="btn-close"
+                                                    data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST"
+                                              action="{{ url_for('prestamos.cancelar', solicitud_id=s.id) }}">
+                                            <input type="hidden" name="csrf_token"
+                                                   value="{{ csrf_token() }}">
+                                            <div class="modal-body">
+                                                <textarea class="form-control"
+                                                          name="motivo_cancelacion"
+                                                          rows="3"
+                                                          placeholder="Motivo..."
+                                                          required></textarea>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button"
+                                                        class="btn btn-secondary btn-sm"
+                                                        data-bs-dismiss="modal">Cerrar</button>
+                                                <button type="submit"
+                                                        class="btn btn-warning btn-sm">
+                                                    Confirmar
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
                         </td>
                     </tr>
                     {% else %}
@@ -204,26 +292,30 @@
 <nav class="mt-3">
     <ul class="pagination pagination-sm justify-content-center">
         <li class="page-item {% if not solicitudes.has_prev %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.prev_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
+            <a class="page-link"
+               href="{{ url_for('prestamos.gestionar', page=solicitudes.prev_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-left"></i>
             </a>
         </li>
         {% for p in solicitudes.iter_pages() %}
             {% if p %}
             <li class="page-item {% if p == solicitudes.page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('prestamos.gestionar', page=p, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">{{ p }}</a>
+                <a class="page-link"
+                   href="{{ url_for('prestamos.gestionar', page=p, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
+                    {{ p }}
+                </a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">…</span></li>
             {% endif %}
         {% endfor %}
         <li class="page-item {% if not solicitudes.has_next %}disabled{% endif %}">
-            <a class="page-link" href="{{ url_for('prestamos.gestionar', page=solicitudes.next_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
+            <a class="page-link"
+               href="{{ url_for('prestamos.gestionar', page=solicitudes.next_num, estado=estado_filtro, tipo=tipo_filtro, per_page=per_page) }}">
                 <i class="bi bi-chevron-right"></i>
             </a>
         </li>
     </ul>
-    <p class="text-center text-muted small">{{ solicitudes.total }} solicitudes en total</p>
 </nav>
 {% endif %}
 {% endblock %}
