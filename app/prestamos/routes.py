@@ -42,6 +42,27 @@ def operador_required(f):
     return decorated
 
 
+def _verificar_demoras_automatico():
+    """Verifica y actualiza demoras sin necesidad de acción manual."""
+    ahora = ahora_bogota()
+    solicitudes_vencidas = Solicitud.query.filter(
+        Solicitud.tipo == 'recurso',
+        Solicitud.estado == 'entregado',
+        Solicitud.fecha_fin.isnot(None)
+    ).all()
+
+    cambios = False
+    for s in solicitudes_vencidas:
+        fecha_limite = s.fecha_fin_efectiva()
+        if fecha_limite and ahora > fecha_limite:
+            s.estado = 'en_demora'
+            cambios = True
+            _notificar_demora(s)
+
+    if cambios:
+        db.session.commit()
+
+
 # ── Solicitar ──────────────────────────────────────────────────────────────────
 
 @bp.route('/solicitar', methods=['GET', 'POST'])
@@ -188,6 +209,9 @@ def mis_solicitudes():
 @login_required
 @operador_required
 def gestionar():
+    
+    _verificar_demoras_automatico()
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 15, type=int)
     if per_page not in [15, 30, 50]:
@@ -322,11 +346,11 @@ def entregar(solicitud_id):
 @login_required
 @operador_required
 def devolucion(solicitud_id):
-    """El operador registra la devolución y el tiempo se detiene."""
     solicitud = Solicitud.query.get_or_404(solicitud_id)
 
-    if solicitud.estado != 'entregado' or solicitud.tipo != 'recurso':
-        flash('Solo aplica para recursos en estado "entregado".', 'warning')
+    # Permitir devolución tanto de 'entregado' como de 'en_demora'
+    if solicitud.tipo != 'recurso' or solicitud.estado not in ['entregado', 'en_demora']:
+        flash('Solo aplica para recursos en uso o en demora.', 'warning')
         return redirect(url_for('prestamos.gestionar'))
 
     if request.method == 'POST':
@@ -335,9 +359,9 @@ def devolucion(solicitud_id):
 
         if estado_devolucion not in ['bueno', 'dañado', 'perdido']:
             flash('Selecciona el estado del recurso.', 'danger')
-            return render_template('prestamos/devolucion_form.html', solicitud=solicitud)
+            return render_template('prestamos/devolucion_form.html',
+                                   solicitud=solicitud)
 
-        # Aquí se detiene el tiempo
         solicitud.fecha_devolucion_real = ahora_bogota()
         solicitud.estado_devolucion = estado_devolucion
         solicitud.novedad_devolucion = novedad or None
@@ -355,11 +379,11 @@ def devolucion(solicitud_id):
         db.session.commit()
         horas = (solicitud.tiempo_uso_minutos or 0) // 60
         mins = (solicitud.tiempo_uso_minutos or 0) % 60
-        flash(f'Devolución registrada. Tiempo de uso: {horas}h {mins}min.', 'success')
+        flash(f'Devolución registrada. Tiempo de uso: {horas}h {mins}min.',
+              'success')
         return redirect(url_for('prestamos.gestionar'))
 
     return render_template('prestamos/devolucion_form.html', solicitud=solicitud)
-
 
 @bp.route('/cancelar/<int:solicitud_id>', methods=['POST'])
 @login_required
@@ -418,12 +442,20 @@ def mis_recursos():
 @usuario_regular_required
 def extender_plazo(solicitud_id):
     solicitud = Solicitud.query.get_or_404(solicitud_id)
+
     if solicitud.usuario_id != current_user.id:
-        flash('No tienes permiso.', 'danger')
+        flash('No tienes permiso para esta acción.', 'danger')
         return redirect(url_for('prestamos.mis_recursos'))
-    if solicitud.estado != 'entregado' or solicitud.tipo != 'recurso':
-        flash('Solo puedes extender recursos en uso.', 'warning')
-        return redirect(url_for('prestamos.mis_recursos'))
+
+    if solicitud.tipo != 'recurso' or solicitud.estado not in ['aprobada', 'entregado']:
+        flash('Solo puedes extender recursos aprobados o en uso.', 'warning')
+        return redirect(url_for('prestamos.mis_solicitudes'))
+
+    # Fecha mínima: la fecha de fin actual
+    fecha_minima = solicitud.fecha_fin_efectiva()
+    fecha_minima_str = (
+        fecha_minima.strftime('%Y-%m-%dT%H:%M') if fecha_minima else ''
+    )
 
     if request.method == 'POST':
         nueva_fecha_str = request.form.get('nueva_fecha_fin', '')
@@ -431,18 +463,23 @@ def extender_plazo(solicitud_id):
             nueva_fecha = datetime.strptime(nueva_fecha_str, '%Y-%m-%dT%H:%M')
             fecha_actual = solicitud.fecha_fin_efectiva()
             if fecha_actual and nueva_fecha <= fecha_actual:
-                flash('La nueva fecha debe ser posterior a la actual.', 'danger')
-                return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
+                flash('La nueva fecha debe ser posterior a la fecha de fin actual.',
+                      'danger')
+                return render_template('prestamos/extender_plazo.html',
+                                       solicitud=solicitud,
+                                       fecha_minima=fecha_minima_str)
             solicitud.fecha_fin_extendida = nueva_fecha
             db.session.commit()
             flash(f'Plazo extendido hasta '
                   f'{nueva_fecha.strftime("%d/%m/%Y %H:%M")}.', 'success')
-            return redirect(url_for('prestamos.mis_recursos'))
+            _notificar_extension(solicitud)
+            return redirect(url_for('prestamos.mis_solicitudes'))
         except ValueError:
             flash('Formato de fecha inválido.', 'danger')
 
-    return render_template('prestamos/extender_plazo.html', solicitud=solicitud)
-
+    return render_template('prestamos/extender_plazo.html',
+                           solicitud=solicitud,
+                           fecha_minima=fecha_minima_str)
 
 # ── QR personal del usuario ────────────────────────────────────────────────────
 
@@ -606,6 +643,9 @@ def devolucion_qr_imagen(solicitud_id):
 
 # ── Notificaciones ─────────────────────────────────────────────────────────────
 
+
+
+
 def _notificar_nueva_solicitud(solicitud):
     try:
         from flask_mail import Message
@@ -681,3 +721,104 @@ def _notificar_entrega(solicitud):
         mail.send(msg)
     except Exception:
         pass
+    
+    # ── Verificar demoras (llamar desde un endpoint o tarea programada) ────────────
+
+@bp.route('/verificar-demoras', methods=['POST'])
+@login_required
+@operador_required
+def verificar_demoras():
+    """
+    Marca como 'en_demora' las solicitudes entregadas cuya fecha
+    de fin ya pasó y envía alertas por correo.
+    """
+    ahora = ahora_bogota()
+    demoras_nuevas = 0
+
+    solicitudes_vencidas = Solicitud.query.filter(
+        Solicitud.tipo == 'recurso',
+        Solicitud.estado == 'entregado',
+        Solicitud.fecha_fin.isnot(None)
+    ).all()
+
+    for s in solicitudes_vencidas:
+        fecha_limite = s.fecha_fin_efectiva()
+        if fecha_limite and ahora > fecha_limite:
+            s.estado = 'en_demora'
+            demoras_nuevas += 1
+            _notificar_demora(s)
+
+    if demoras_nuevas > 0:
+        db.session.commit()
+
+    flash(f'Verificación completada. {demoras_nuevas} préstamo(s) marcado(s) '
+          f'en demora.', 'warning' if demoras_nuevas > 0 else 'success')
+    return redirect(url_for('prestamos.gestionar'))
+
+
+def _notificar_demora(solicitud):
+    """Envía correo al usuario avisando que está en demora."""
+    try:
+        from flask_mail import Message
+        from app import mail
+        fecha_limite = solicitud.fecha_fin_efectiva()
+        msg = Message(
+            subject='⚠️ Préstamo vencido — Por favor entrega el recurso',
+            recipients=[solicitud.usuario.email],
+            html=f'''
+            <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:0 auto;">
+                <div style="background:#dc3545;padding:24px;border-radius:12px 12px 0 0;
+                            text-align:center;">
+                    <h2 style="color:white;margin:0;">⚠️ Préstamo vencido</h2>
+                    <p style="color:#ffcdd2;margin:4px 0 0;">
+                        Sistema de Préstamos · UCundinamarca
+                    </p>
+                </div>
+                <div style="background:#ffffff;padding:32px;border:1px solid #e0e0e0;
+                            border-top:none;border-radius:0 0 12px 12px;">
+                    <p style="font-size:16px;">
+                        Hola <strong>{solicitud.usuario.nombre}</strong>,
+                    </p>
+                    <p style="color:#555;">
+                        El tiempo de préstamo del siguiente recurso
+                        <strong>ha vencido</strong> y aún no ha sido devuelto:
+                    </p>
+
+                    <div style="background:#fff3cd;border:1px solid #ffc107;
+                                border-radius:8px;padding:16px;margin:20px 0;">
+                        <p style="margin:0;font-size:15px;">
+                            <strong>📦 Recurso:</strong>
+                            {solicitud.get_item_nombre()}
+                        </p>
+                        <p style="margin:8px 0 0;color:#666;">
+                            <strong>Fecha límite:</strong>
+                            {fecha_limite.strftime("%d/%m/%Y %H:%M") if fecha_limite else "—"}
+                        </p>
+                    </div>
+
+                    <p style="color:#555;">Por favor <strong>acércate lo antes posible</strong>
+                    a la administración para entregar el recurso.</p>
+
+                    <p style="color:#555;">Si necesitas más tiempo, solicita una
+                    <strong>extensión de plazo</strong> desde el sistema antes de que
+                    se tomen medidas adicionales.</p>
+
+                    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                    <p style="color:#aaa;font-size:11px;text-align:center;">
+                        Sistema de Préstamos · Universidad de Cundinamarca · Ext. Facatativá
+                    </p>
+                </div>
+            </div>
+            ''',
+            body=(
+                f'Hola {solicitud.usuario.nombre},\n\n'
+                f'El préstamo de "{solicitud.get_item_nombre()}" ha vencido.\n'
+                f'Fecha límite: {fecha_limite.strftime("%d/%m/%Y %H:%M") if fecha_limite else "—"}\n\n'
+                f'Por favor acércate a la administración a entregar el recurso '
+                f'o solicita una extensión desde el sistema.\n\n'
+                f'Sistema de Préstamos — UCundinamarca'
+            )
+        )
+        mail.send(msg)
+    except Exception as e:
+        print(f'Error enviando alerta de demora: {e}')

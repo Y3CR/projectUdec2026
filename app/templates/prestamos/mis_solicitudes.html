@@ -115,6 +115,12 @@
                             <span class="badge bg-info text-dark">Devuelta</span>
                             {% elif s.estado == 'rechazada' %}
                             <span class="badge bg-danger">Rechazada</span>
+                            {% elif s.estado == 'en_demora' %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-exclamation-triangle me-1"></i>En demora
+                            </span>
+
+
                             {% endif %}
                         </td>
                         <td class="text-center">
@@ -135,6 +141,12 @@
                                 {{ s.tiempo_uso_minutos // 60 }}h
                                 {{ s.tiempo_uso_minutos % 60 }}min
                             </span>
+                            {% elif s.estado == 'en_demora' and s.tipo == 'recurso' %}
+                            <span class="small text-danger fw-semibold">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Entrega pendiente
+                            </span>
+
                             {% elif s.estado == 'rechazada' and s.motivo_rechazo %}
                             <span class="small text-danger">
                                 {{ s.motivo_rechazo[:40] }}

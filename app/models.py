@@ -121,6 +121,7 @@ class Recurso(db.Model):
     __tablename__ = 'recursos'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(150), nullable=False)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)  # ✅ esta línea
     serial = db.Column(db.String(100), unique=True, nullable=True)
     codigo_interno = db.Column(db.String(50), unique=True, nullable=True)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'),

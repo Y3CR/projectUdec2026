@@ -46,7 +46,7 @@
 
                 <div class="d-flex gap-2">
                     <form method="POST"
-                          action="{{ url_for('prestamos.entregar_recurso', solicitud_id=s.id) }}"
+                          action="{{ url_for('prestamos.entregar', solicitud_id=s.id) }}"
                           class="flex-fill"
                           onsubmit="return confirm('¿Confirmas que vas a entregar este recurso? Recuerda llevarlo físicamente a la administración.')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
