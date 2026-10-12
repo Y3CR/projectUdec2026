@@ -216,7 +216,7 @@ def gestionar():
     per_page = request.args.get('per_page', 15, type=int)
     if per_page not in [15, 30, 50]:
         per_page = 15
-    estado_filtro = request.args.get('estado', 'pendiente')
+    estado_filtro = request.args.get('estado', '')
     tipo_filtro = request.args.get('tipo', '')
 
     query = Solicitud.query
