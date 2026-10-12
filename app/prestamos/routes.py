@@ -644,22 +644,65 @@ def devolucion_qr_imagen(solicitud_id):
 # ── Notificaciones ─────────────────────────────────────────────────────────────
 
 
-
-
 def _notificar_nueva_solicitud(solicitud):
     try:
         from flask_mail import Message
         from app import mail
+        tipo_label = 'acceso RFID' if solicitud.tipo == 'rfid' else 'recurso físico'
         msg = Message(
-            subject=f'Nueva solicitud #{solicitud.id} — UCundinamarca',
+            subject=f'📋 Solicitud #{solicitud.id} recibida — UCundinamarca',
             recipients=[solicitud.usuario.email],
+            html=f'''
+            <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:0 auto;">
+                <div style="background:#1b4332;padding:24px;
+                            border-radius:12px 12px 0 0;text-align:center;">
+                    <h2 style="color:white;margin:0;">Sistema de Préstamos</h2>
+                    <p style="color:#b7e4c7;margin:4px 0 0;">
+                        Universidad de Cundinamarca
+                    </p>
+                </div>
+                <div style="background:#ffffff;padding:32px;
+                            border:1px solid #e0e0e0;
+                            border-top:none;border-radius:0 0 12px 12px;">
+                    <p style="font-size:16px;">
+                        Hola <strong>{solicitud.usuario.nombre}</strong>,
+                    </p>
+                    <p style="color:#555;">
+                        Tu solicitud de <strong>{tipo_label}</strong>
+                        fue recibida correctamente y está
+                        <strong>pendiente de aprobación</strong>.
+                    </p>
+                    <div style="background:#f0f7f3;border-left:4px solid #1b4332;
+                                border-radius:4px;padding:16px;margin:20px 0;">
+                        <p style="margin:0;color:#1b4332;font-weight:600;">
+                            Solicitud #{solicitud.id}
+                        </p>
+                        <p style="margin:6px 0 0;color:#555;font-size:14px;">
+                            Tipo: {tipo_label.capitalize()}<br>
+                            Item: {solicitud.get_item_nombre()}<br>
+                            Estado: <span style="color:#b8901f;">
+                                Pendiente de revisión
+                            </span>
+                        </p>
+                    </div>
+                    <p style="color:#777;font-size:13px;">
+                        Te notificaremos cuando el operador gestione tu solicitud.
+                    </p>
+                    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                    <p style="color:#aaa;font-size:11px;text-align:center;">
+                        Sistema de Préstamos · Universidad de Cundinamarca
+                        · Ext. Facatativá
+                    </p>
+                </div>
+            </div>
+            ''',
             body=(f'Hola {solicitud.usuario.nombre},\n\n'
-                  f'Tu solicitud #{solicitud.id} fue recibida y está pendiente.\n\n'
+                  f'Tu solicitud #{solicitud.id} fue recibida.\n'
                   f'Sistema de Préstamos — UCundinamarca')
         )
         mail.send(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f'Error notificando nueva solicitud: {e}')
 
 
 def _notificar_resultado(solicitud):
@@ -667,62 +710,340 @@ def _notificar_resultado(solicitud):
         from flask_mail import Message
         from app import mail
         usuario = solicitud.usuario
+
         if solicitud.estado == 'aprobada':
             if solicitud.tipo == 'rfid':
-                asunto = f'✅ Acceso RFID aprobado — UCundinamarca'
-                cuerpo = (
-                    f'Hola {usuario.nombre},\n\n'
-                    f'Tu solicitud #{solicitud.id} de acceso RFID fue APROBADA.\n'
-                    f'Tu tarjeta {solicitud.uid_tarjeta} ha sido registrada.\n\n'
-                    f'Sistema de Préstamos — UCundinamarca'
-                )
+                # ── Correo aprobación RFID ─────────────────────────────────
+                dispositivos_ids = solicitud.get_dispositivos_ids()
+                from app.models import DispositivoRFID
+                nombres_dispositivos = []
+                for did in dispositivos_ids:
+                    d = DispositivoRFID.query.get(did)
+                    if d:
+                        espacio = d.espacio.nombre if d.espacio else 'Sin espacio'
+                        nombres_dispositivos.append(
+                            f'<li style="margin-bottom:4px;">'
+                            f'<strong>{d.nombre}</strong> ({d.codigo})'
+                            f' — {espacio}</li>'
+                        )
+                lista_dispositivos = (
+                    '<ul style="padding-left:20px;margin:8px 0;">'
+                    + ''.join(nombres_dispositivos)
+                    + '</ul>'
+                ) if nombres_dispositivos else '<p>Dispositivos asignados.</p>'
+
+                asunto = '✅ Acceso RFID aprobado — UCundinamarca'
+                cuerpo_html = f'''
+                <div style="font-family:Segoe UI,sans-serif;
+                            max-width:520px;margin:0 auto;">
+                    <div style="background:#1b4332;padding:24px;
+                                border-radius:12px 12px 0 0;text-align:center;">
+                        <h2 style="color:white;margin:0;">
+                            ✅ Acceso RFID Aprobado
+                        </h2>
+                        <p style="color:#b7e4c7;margin:4px 0 0;">
+                            Universidad de Cundinamarca
+                        </p>
+                    </div>
+                    <div style="background:#ffffff;padding:32px;
+                                border:1px solid #e0e0e0;border-top:none;
+                                border-radius:0 0 12px 12px;">
+                        <p style="font-size:16px;">
+                            Hola <strong>{usuario.nombre}</strong>,
+                        </p>
+                        <p style="color:#555;">
+                            Tu solicitud de acceso RFID ha sido
+                            <strong style="color:#198754;">APROBADA</strong>.
+                            Tu tarjeta ha sido registrada en los siguientes
+                            dispositivos:
+                        </p>
+                        <div style="background:#f0f7f3;border-left:4px solid #1b4332;
+                                    border-radius:4px;padding:16px;margin:20px 0;">
+                            <p style="margin:0 0 6px;color:#1b4332;font-weight:600;">
+                                Tarjeta registrada:
+                                <code>{solicitud.uid_tarjeta}</code>
+                            </p>
+                            {lista_dispositivos}
+                        </div>
+                        <p style="color:#555;">
+                            A partir de ahora puedes acceder a los espacios
+                            correspondientes presentando tu tarjeta RFID en
+                            los lectores instalados.
+                        </p>
+                        <div style="background:#e8f5e9;border-radius:8px;
+                                    padding:14px;margin:16px 0;text-align:center;">
+                            <p style="margin:0;color:#2e7d32;font-size:13px;">
+                                🕐 Recuerda respetar el horario de acceso
+                                establecido por la institución.
+                            </p>
+                        </div>
+                        <hr style="border:none;border-top:1px solid #eee;
+                                   margin:20px 0;">
+                        <p style="color:#aaa;font-size:11px;text-align:center;">
+                            Sistema de Préstamos · Universidad de Cundinamarca
+                            · Ext. Facatativá
+                        </p>
+                    </div>
+                </div>
+                '''
             else:
-                asunto = f'✅ Solicitud #{solicitud.id} aprobada — Pasa a recoger'
-                cuerpo = (
-                    f'Hola {usuario.nombre},\n\n'
-                    f'Tu solicitud #{solicitud.id} fue APROBADA.\n\n'
-                    f'Recurso: {solicitud.get_item_nombre()}\n'
-                    f'Devolución estimada: '
-                    f'{solicitud.fecha_fin.strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin else "—"}\n\n'
-                    f'Acércate a la administración con tu QR de comprobante '
-                    f'para retirar el recurso.\n\n'
-                    f'Sistema de Préstamos — UCundinamarca'
+                # ── Correo aprobación recurso ──────────────────────────────
+                fecha_devolucion = (
+                    solicitud.fecha_fin.strftime('%d/%m/%Y %H:%M')
+                    if solicitud.fecha_fin else '—'
                 )
+                asunto = f'✅ Solicitud #{solicitud.id} aprobada — Pasa a recoger'
+                cuerpo_html = f'''
+                <div style="font-family:Segoe UI,sans-serif;
+                            max-width:520px;margin:0 auto;">
+                    <div style="background:#1b4332;padding:24px;
+                                border-radius:12px 12px 0 0;text-align:center;">
+                        <h2 style="color:white;margin:0;">
+                            ✅ Solicitud Aprobada
+                        </h2>
+                        <p style="color:#b7e4c7;margin:4px 0 0;">
+                            Universidad de Cundinamarca
+                        </p>
+                    </div>
+                    <div style="background:#ffffff;padding:32px;
+                                border:1px solid #e0e0e0;border-top:none;
+                                border-radius:0 0 12px 12px;">
+                        <p style="font-size:16px;">
+                            Hola <strong>{usuario.nombre}</strong>,
+                        </p>
+                        <p style="color:#555;">
+                            Tu solicitud de préstamo fue
+                            <strong style="color:#198754;">APROBADA</strong>.
+                            Ya puedes pasar a recoger el recurso.
+                        </p>
+                        <div style="background:#f0f7f3;border-left:4px solid #1b4332;
+                                    border-radius:4px;padding:16px;margin:20px 0;">
+                            <p style="margin:0;color:#1b4332;font-weight:600;
+                                      font-size:15px;">
+                                📦 {solicitud.get_item_nombre()}
+                            </p>
+                            <p style="margin:8px 0 0;color:#555;font-size:14px;">
+                                <strong>Devolución estimada:</strong>
+                                {fecha_devolucion}
+                            </p>
+                        </div>
+                        <div style="text-align:center;margin:24px 0;">
+                            <div style="background:#fff3cd;border:1px solid #ffc107;
+                                        border-radius:8px;padding:14px;
+                                        display:inline-block;">
+                                <p style="margin:0;color:#856404;font-size:14px;">
+                                    📱 <strong>Muestra tu QR de comprobante</strong>
+                                    al operador para retirar el recurso.
+                                    Encuéntralo en "Mis Solicitudes" del sistema.
+                                </p>
+                            </div>
+                        </div>
+                        <p style="color:#777;font-size:13px;">
+                            El tiempo de préstamo comenzará a contar
+                            <strong>desde el momento de la entrega física</strong>.
+                        </p>
+                        <hr style="border:none;border-top:1px solid #eee;
+                                   margin:20px 0;">
+                        <p style="color:#aaa;font-size:11px;text-align:center;">
+                            Sistema de Préstamos · Universidad de Cundinamarca
+                            · Ext. Facatativá
+                        </p>
+                    </div>
+                </div>
+                '''
         else:
+            # ── Correo rechazo ─────────────────────────────────────────────
             asunto = f'❌ Solicitud #{solicitud.id} rechazada — UCundinamarca'
-            cuerpo = (
-                f'Hola {usuario.nombre},\n\n'
-                f'Tu solicitud #{solicitud.id} fue RECHAZADA.\n'
-                f'Motivo: {solicitud.motivo_rechazo}\n\n'
-                f'Sistema de Préstamos — UCundinamarca'
-            )
-        msg = Message(subject=asunto, recipients=[usuario.email], body=cuerpo)
+            cuerpo_html = f'''
+            <div style="font-family:Segoe UI,sans-serif;
+                        max-width:520px;margin:0 auto;">
+                <div style="background:#c0392b;padding:24px;
+                            border-radius:12px 12px 0 0;text-align:center;">
+                    <h2 style="color:white;margin:0;">❌ Solicitud Rechazada</h2>
+                    <p style="color:#f5b7b1;margin:4px 0 0;">
+                        Universidad de Cundinamarca
+                    </p>
+                </div>
+                <div style="background:#ffffff;padding:32px;
+                            border:1px solid #e0e0e0;border-top:none;
+                            border-radius:0 0 12px 12px;">
+                    <p style="font-size:16px;">
+                        Hola <strong>{usuario.nombre}</strong>,
+                    </p>
+                    <p style="color:#555;">
+                        Tu solicitud #{solicitud.id} ha sido
+                        <strong style="color:#c0392b;">RECHAZADA</strong>
+                        por el siguiente motivo:
+                    </p>
+                    <div style="background:#fdf2f2;border-left:4px solid #c0392b;
+                                border-radius:4px;padding:16px;margin:20px 0;">
+                        <p style="margin:0;color:#c0392b;font-style:italic;">
+                            "{solicitud.motivo_rechazo}"
+                        </p>
+                    </div>
+                    <p style="color:#555;">
+                        Si crees que esto es un error, puedes acercarte a la
+                        administración o realizar una nueva solicitud.
+                    </p>
+                    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                    <p style="color:#aaa;font-size:11px;text-align:center;">
+                        Sistema de Préstamos · Universidad de Cundinamarca
+                        · Ext. Facatativá
+                    </p>
+                </div>
+            </div>
+            '''
+
+        msg = Message(
+            subject=asunto,
+            recipients=[usuario.email],
+            html=cuerpo_html,
+            body=f'Solicitud #{solicitud.id} — {solicitud.estado.upper()}'
+        )
         mail.send(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f'Error notificando resultado: {e}')
 
 
 def _notificar_entrega(solicitud):
     try:
         from flask_mail import Message
         from app import mail
+        fecha_inicio = (
+            solicitud.fecha_inicio.strftime('%d/%m/%Y %H:%M')
+            if solicitud.fecha_inicio else '—'
+        )
+        fecha_devolucion = (
+            solicitud.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M')
+            if solicitud.fecha_fin_efectiva() else '—'
+        )
         msg = Message(
             subject=f'📦 Recurso entregado — Solicitud #{solicitud.id}',
             recipients=[solicitud.usuario.email],
+            html=f'''
+            <div style="font-family:Segoe UI,sans-serif;
+                        max-width:520px;margin:0 auto;">
+                <div style="background:#1b4332;padding:24px;
+                            border-radius:12px 12px 0 0;text-align:center;">
+                    <h2 style="color:white;margin:0;">📦 Recurso Entregado</h2>
+                    <p style="color:#b7e4c7;margin:4px 0 0;">
+                        Universidad de Cundinamarca
+                    </p>
+                </div>
+                <div style="background:#ffffff;padding:32px;
+                            border:1px solid #e0e0e0;border-top:none;
+                            border-radius:0 0 12px 12px;">
+                    <p style="font-size:16px;">
+                        Hola <strong>{solicitud.usuario.nombre}</strong>,
+                    </p>
+                    <p style="color:#555;">
+                        El recurso ha sido entregado exitosamente.
+                        <strong>El tiempo de préstamo ha comenzado.</strong>
+                    </p>
+                    <div style="background:#f0f7f3;border-left:4px solid #1b4332;
+                                border-radius:4px;padding:16px;margin:20px 0;">
+                        <p style="margin:0;color:#1b4332;font-weight:600;
+                                  font-size:15px;">
+                            📦 {solicitud.get_item_nombre()}
+                        </p>
+                        <p style="margin:8px 0 0;color:#555;font-size:14px;">
+                            <strong>⏱ Inicio:</strong> {fecha_inicio}<br>
+                            <strong>📅 Devolución estimada:</strong>
+                            {fecha_devolucion}
+                        </p>
+                    </div>
+                    <div style="background:#fff3cd;border:1px solid #ffc107;
+                                border-radius:8px;padding:14px;margin:16px 0;">
+                        <p style="margin:0;color:#856404;font-size:13px;">
+                            ⚠️ <strong>Recuerda</strong> devolver el recurso
+                            antes de la fecha indicada. Si necesitas más tiempo,
+                            solicita una extensión desde el sistema antes
+                            de que venza el plazo.
+                        </p>
+                    </div>
+                    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                    <p style="color:#aaa;font-size:11px;text-align:center;">
+                        Sistema de Préstamos · Universidad de Cundinamarca
+                        · Ext. Facatativá
+                    </p>
+                </div>
+            </div>
+            ''',
             body=(
                 f'Hola {solicitud.usuario.nombre},\n\n'
-                f'El recurso "{solicitud.get_item_nombre()}" fue entregado.\n'
-                f'Inicio: {solicitud.fecha_inicio.strftime("%d/%m/%Y %H:%M")}\n'
-                f'Devolución estimada: '
-                f'{solicitud.fecha_fin_efectiva().strftime("%d/%m/%Y %H:%M") if solicitud.fecha_fin_efectiva() else "—"}\n\n'
+                f'Recurso "{solicitud.get_item_nombre()}" entregado.\n'
+                f'Inicio: {fecha_inicio}\n'
+                f'Devolución estimada: {fecha_devolucion}\n\n'
                 f'Sistema de Préstamos — UCundinamarca'
             )
         )
         mail.send(msg)
-    except Exception:
-        pass
-    
-    # ── Verificar demoras (llamar desde un endpoint o tarea programada) ────────────
+    except Exception as e:
+        print(f'Error notificando entrega: {e}')
+
+
+def _notificar_extension(solicitud):
+    try:
+        from flask_mail import Message
+        from app import mail
+        nueva_fecha = (
+            solicitud.fecha_fin_extendida.strftime('%d/%m/%Y %H:%M')
+            if solicitud.fecha_fin_extendida else '—'
+        )
+        # Notificar al usuario
+        msg_usuario = Message(
+            subject=f'⏰ Plazo extendido — Solicitud #{solicitud.id}',
+            recipients=[solicitud.usuario.email],
+            html=f'''
+            <div style="font-family:Segoe UI,sans-serif;
+                        max-width:520px;margin:0 auto;">
+                <div style="background:#b8901f;padding:24px;
+                            border-radius:12px 12px 0 0;text-align:center;">
+                    <h2 style="color:white;margin:0;">⏰ Plazo Extendido</h2>
+                    <p style="color:#fff3cd;margin:4px 0 0;">
+                        Universidad de Cundinamarca
+                    </p>
+                </div>
+                <div style="background:#ffffff;padding:32px;
+                            border:1px solid #e0e0e0;border-top:none;
+                            border-radius:0 0 12px 12px;">
+                    <p style="font-size:16px;">
+                        Hola <strong>{solicitud.usuario.nombre}</strong>,
+                    </p>
+                    <p style="color:#555;">
+                        Has extendido el plazo de tu préstamo exitosamente.
+                    </p>
+                    <div style="background:#fffbf0;border-left:4px solid #b8901f;
+                                border-radius:4px;padding:16px;margin:20px 0;">
+                        <p style="margin:0;color:#b8901f;font-weight:600;">
+                            📦 {solicitud.get_item_nombre()}
+                        </p>
+                        <p style="margin:8px 0 0;color:#555;font-size:14px;">
+                            <strong>Nueva fecha de devolución:</strong>
+                            {nueva_fecha}
+                        </p>
+                    </div>
+                    <p style="color:#777;font-size:13px;">
+                        El operador ha sido notificado de la extensión.
+                        Recuerda cumplir con la nueva fecha.
+                    </p>
+                    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                    <p style="color:#aaa;font-size:11px;text-align:center;">
+                        Sistema de Préstamos · Universidad de Cundinamarca
+                        · Ext. Facatativá
+                    </p>
+                </div>
+            </div>
+            ''',
+            body=(f'Plazo extendido hasta {nueva_fecha}.\n'
+                  f'Sistema de Préstamos — UCundinamarca')
+        )
+        mail.send(msg_usuario)
+    except Exception as e:
+        print(f'Error notificando extensión: {e}')
+
+
+
 
 @bp.route('/verificar-demoras', methods=['POST'])
 @login_required
@@ -822,3 +1143,26 @@ def _notificar_demora(solicitud):
         mail.send(msg)
     except Exception as e:
         print(f'Error enviando alerta de demora: {e}')
+        
+def _notificar_extension(solicitud):
+    """Notifica al usuario que su plazo fue extendido."""
+    try:
+        from flask_mail import Message
+        from app import mail
+        nueva_fecha = solicitud.fecha_fin_efectiva()
+        msg = Message(
+            subject=f'📅 Plazo extendido — Solicitud #{solicitud.id}',
+            recipients=[solicitud.usuario.email],
+            body=(
+                f'Hola {solicitud.usuario.nombre},\n\n'
+                f'El plazo de devolución del recurso '
+                f'"{solicitud.get_item_nombre()}" ha sido extendido.\n\n'
+                f'Nueva fecha límite: '
+                f'{nueva_fecha.strftime("%d/%m/%Y %H:%M") if nueva_fecha else "—"}\n\n'
+                f'Recuerda devolver el recurso antes de esa fecha.\n\n'
+                f'Sistema de Préstamos — UCundinamarca'
+            )
+        )
+        mail.send(msg)
+    except Exception:
+        pass

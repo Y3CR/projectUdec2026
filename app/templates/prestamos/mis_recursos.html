@@ -48,7 +48,7 @@
                     <form method="POST"
                           action="{{ url_for('prestamos.entregar', solicitud_id=s.id) }}"
                           class="flex-fill"
-                          onsubmit="return confirm('¿Confirmas que vas a entregar este recurso? Recuerda llevarlo físicamente a la administración.')">
+                          onsubmit="return confirm('¿Confirmas que vas a entregar este recurso? Recuerda llevarlo físicamente a la administración y presentar el Qr')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-success btn-sm w-100">
                             <i class="bi bi-box-arrow-in-down me-1"></i>Entregar

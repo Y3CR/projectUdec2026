@@ -25,3 +25,12 @@ class Config:
     MAIL_USERNAME = 'gestionudec2026@gmail.com'
     MAIL_PASSWORD = 'dkmghbexmlxaugnd'
     MAIL_DEFAULT_SENDER = 'gestionudec2026@gmail.com'
+    
+    
+    ##################para el correo @ucundinamarca###############
+   # MAIL_SERVER   = 'smtp.office365.com'
+   # MAIL_PORT     = 587
+   # MAIL_USE_TLS  = True
+   # MAIL_USERNAME = 'tu_correo@ucundinamarca.edu.co'
+   # MAIL_PASSWORD = 'tu_contraseña_institucional'
+   # MAIL_DEFAULT_SENDER = 'tu_correo@ucundinamarca.edu.co'
