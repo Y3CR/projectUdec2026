@@ -616,29 +616,53 @@ def confirmar_entrega_qr(solicitud_id):
 
 # ── QR de devolución (operador escanea para recibir) ──────────────────────────
 
+
 @bp.route('/devolucion-qr/<int:solicitud_id>/imagen')
 @login_required
-@operador_required
 def devolucion_qr_imagen(solicitud_id):
-    """QR que al escanearse lleva al formulario de devolución."""
+    """
+    QR que al escanearse lleva al formulario de devolución.
+    Accesible por el propio usuario dueño del préstamo
+    y por operadores/administradores.
+    """
     import qrcode
     from flask import request as req
 
     solicitud = Solicitud.query.get_or_404(solicitud_id)
+
+    # Verificar permiso: solo el dueño del préstamo o el operador/admin
+    es_dueno = solicitud.usuario_id == current_user.id
+    es_operador = current_user.get_role_name() in ['operador', 'administrador']
+
+    if not es_dueno and not es_operador:
+        flash('No tienes permiso para ver este QR.', 'danger')
+        return redirect(url_for('prestamos.mis_solicitudes'))
+
+    # Solo tiene sentido si el recurso está en uso o en demora
+    if solicitud.estado not in ['entregado', 'en_demora']:
+        flash('Este recurso no está en uso actualmente.', 'warning')
+        return redirect(url_for('prestamos.mis_solicitudes'))
+
     base_url = req.host_url.rstrip('/')
     url = f"{base_url}/prestamos/devolucion/{solicitud_id}"
 
-    qr = qrcode.QRCode(version=1,
-                       error_correction=qrcode.constants.ERROR_CORRECT_H,
-                       box_size=10, border=4)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4
+    )
     qr.add_data(url)
     qr.make(fit=True)
     img = qr.make_image(fill_color='#c0392b', back_color='white')
-    buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-    return send_file(buffer, mimetype='image/png',
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png',
                      download_name=f'devolucion_{solicitud_id}.png')
+
+
+
 
 
 # ── Notificaciones ─────────────────────────────────────────────────────────────

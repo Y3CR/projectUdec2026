@@ -15,10 +15,11 @@
 <div class="row g-3">
     {% for s in recursos_activos %}
     <div class="col-md-6 col-lg-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
+        <div class="card border-0 shadow-sm h-100
+            {% if s.estado == 'en_demora' %}border-warning border-2{% endif %}">
+            <div class="card-body d-flex flex-column">
 
-                <!-- Encabezado de la tarjeta -->
+                <!-- Encabezado -->
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <h6 class="fw-bold mb-0">{{ s.get_item_nombre() }}</h6>
                     {% if s.estado == 'entregado' %}
@@ -58,8 +59,7 @@
                     </div>
                     <div class="{% if s.fecha_fin_efectiva() and ahora
                                       and s.fecha_fin_efectiva() < ahora %}
-                                text-danger fw-semibold
-                                {% else %}text-muted{% endif %}">
+                                text-danger fw-semibold{% else %}text-muted{% endif %}">
                         <i class="bi bi-calendar-x me-1"></i>
                         Devolver antes de:
                         {{ s.fecha_fin_efectiva().strftime('%d/%m/%Y %H:%M')
@@ -72,23 +72,35 @@
                     </div>
                 </div>
 
-                <!-- Botones: solo Extender -->
-                <div class="d-flex gap-2">
-                    <a href="{{ url_for('prestamos.extender_plazo', solicitud_id=s.id) }}"
-                       class="btn btn-outline-warning btn-sm flex-fill">
-                        <i class="bi bi-clock-history me-1"></i>Extender plazo
-                    </a>
-                </div>
-
-                <!-- Aviso si está en demora -->
+                <!-- Aviso demora -->
                 {% if s.estado == 'en_demora' %}
-                <div class="alert alert-danger py-2 small mt-2 mb-0">
+                <div class="alert alert-danger py-2 small mb-3">
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     Tu préstamo está <strong>vencido</strong>.
-                    Acércate a la administración a entregar el recurso
-                    o solicita una extensión.
+                    Acércate a la administración o solicita una extensión.
                 </div>
                 {% endif %}
+
+                <!-- Botones -->
+                <div class="mt-auto d-flex flex-column gap-2">
+
+                    <!-- Extender plazo -->
+                    <a href="{{ url_for('prestamos.extender_plazo',
+                                       solicitud_id=s.id) }}"
+                       class="btn btn-outline-warning btn-sm w-100">
+                        <i class="bi bi-clock-history me-1"></i>Extender plazo
+                    </a>
+
+                    <!-- QR de devolución para mostrar al operador -->
+                    <a href="{{ url_for('prestamos.devolucion_qr_imagen',
+                                       solicitud_id=s.id) }}"
+                       class="btn btn-outline-info btn-sm w-100"
+                       target="_blank"
+                       title="Muestra este QR al operador para registrar la devolución">
+                        <i class="bi bi-qr-code me-1"></i>QR para devolver
+                    </a>
+
+                </div>
 
             </div>
         </div>
