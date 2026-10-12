@@ -104,6 +104,12 @@
                                 <i class="bi bi-file-earmark-bar-graph me-1"></i>Generar reporte
                             </a>
                         </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('estadisticas.exportar_csv_ml') }}">
+                                <i class="bi bi-filetype-csv me-1"></i>Exportar CSV
+                            </a>    
+                        </li>
+
                     </ul>
                 </li>
                 <li class="nav-item dropdown">
@@ -252,6 +258,12 @@
                                 <i class="bi bi-file-earmark-bar-graph me-1"></i>Generar reporte
                             </a>
                         </li>
+
+                         <li>
+                            <a class="dropdown-item" href="{{ url_for('estadisticas.exportar_csv_ml') }}">
+                                <i class="bi bi-filetype-csv me-1"></i>Exportar CSV
+                            </a>    
+                        </li> 
                     </ul>
                 </li>
                 {% endif %}

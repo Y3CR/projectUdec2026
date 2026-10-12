@@ -353,44 +353,41 @@
 
 {% endblock %}
 
+
+
 {% block scripts %}
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<!-- html2canvas para captura -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<!-- jsPDF para exportar PDF -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
-    const PERIODO = "{{ periodo }}";
-    const VERDE = '#1b4332';
+const PERIODO = "{{ periodo }}";
+const VERDE = '#1b4332';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
 
-    // Defaults de Chart.js
-    Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
-    Chart.defaults.font.size = 12;
+const charts = {};
 
-    const charts = {};
+function crearChart(id, tipo, labels, datasets, opciones = {}) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(ctx, {
+        type: tipo,
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: tipo === 'doughnut' ? 'bottom' : 'top' } },
+            ...opciones
+        }
+    });
+}
 
-    function crearChart(id, tipo, labels, datasets, opciones = {}) {
-        const ctx = document.getElementById(id);
-        if (!ctx) return;
-        if (charts[id]) charts[id].destroy();
-        charts[id] = new Chart(ctx, {
-            type: tipo,
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: tipo === 'doughnut' ? 'bottom' : 'top' },
-                    tooltip: { callbacks: {} }
-                },
-                ...opciones
-            }
-        });
-    }
+// Todas las APIs reciben el período actual como parámetro
+function cargarGraficas() {
+    const p = PERIODO;
 
-    // 1. Solicitudes por mes
-    fetch(`/estadisticas/api/solicitudes-por-mes?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/solicitudes-por-mes?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartMes', 'line', d.labels,
                 d.datasets.map(ds => ({
@@ -406,16 +403,14 @@
             );
         });
 
-    // 2. Estados (donut)
-    fetch(`/estadisticas/api/solicitudes-por-estado?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/solicitudes-por-estado?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartEstados', 'doughnut', d.labels,
                 [{ data: d.data, backgroundColor: d.colors, borderWidth: 2 }]
             );
         });
 
-    // 3. Recursos más solicitados
-    fetch(`/estadisticas/api/recursos-mas-solicitados?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/recursos-mas-solicitados?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartRecursos', 'bar', d.labels,
                 [{ label: 'Solicitudes', data: d.data,
@@ -425,8 +420,7 @@
             );
         });
 
-    // 4. Espacios más accedidos (horizontal)
-    fetch(`/estadisticas/api/espacios-mas-accedidos?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/espacios-mas-accedidos?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartEspacios', 'bar', d.labels,
                 [{ label: 'Accesos', data: d.data,
@@ -437,8 +431,7 @@
             );
         });
 
-    // 5. Accesos por hora
-    fetch(`/estadisticas/api/accesos-por-hora?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/accesos-por-hora?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartHoras', 'bar', d.labels,
                 d.datasets.map(ds => ({
@@ -447,12 +440,11 @@
                     backgroundColor: ds.color + 'cc',
                     borderRadius: 3
                 })),
-                { scales: { y: { beginAtZero: true }, x: { stacked: false } } }
+                { scales: { y: { beginAtZero: true } } }
             );
         });
 
-    // 6. Tiempo promedio
-    fetch(`/estadisticas/api/tiempo-uso-promedio?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/tiempo-uso-promedio?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartTiempo', 'bar', d.labels,
                 [{ label: 'Horas promedio', data: d.data,
@@ -462,8 +454,7 @@
             );
         });
 
-    // 7. Usuarios más activos
-    fetch(`/estadisticas/api/usuarios-mas-activos?periodo=${PERIODO}`)
+    fetch(`/estadisticas/api/usuarios-mas-activos?periodo=${p}`)
         .then(r => r.json()).then(d => {
             crearChart('chartUsuarios', 'bar', d.labels,
                 [{ label: 'Solicitudes', data: d.data,
@@ -472,72 +463,61 @@
                   plugins: { legend: { display: false } } }
             );
         });
+}
 
-    // Descargar gráfica individual como PNG
-    function descargarGrafica(chartId, nombre) {
-        const chart = charts[chartId];
-        if (!chart) return;
-        const url = chart.toBase64Image();
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${nombre}_${PERIODO}.png`;
-        a.click();
+// Cargar al abrir la página
+cargarGraficas();
+
+function descargarGrafica(chartId, nombre) {
+    const chart = charts[chartId];
+    if (!chart) return;
+    const a = document.createElement('a');
+    a.href = chart.toBase64Image();
+    a.download = `${nombre}_${PERIODO}.png`;
+    a.click();
+}
+
+async function exportarPDF() {
+    const { jsPDF } = window.jspdf;
+    const btn = document.querySelector('button[onclick="exportarPDF()"]');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
+    btn.disabled = true;
+
+    const canvas = await html2canvas(document.body, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#f5f7fa'
+    });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = (canvas.height * pdfW) / canvas.width;
+    const pageH = pdf.internal.pageSize.getHeight();
+    let posY = 0;
+    for (let i = 0; i < Math.ceil(pdfH / pageH); i++) {
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
+        posY += pageH;
     }
+    pdf.save(`dashboard_estadisticas_${PERIODO}.pdf`);
+    btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF Dashboard';
+    btn.disabled = false;
+}
 
-    // Exportar todo el dashboard como PDF
-    async function exportarPDF() {
-        const { jsPDF } = window.jspdf;
-        const btn = document.querySelector('button[onclick="exportarPDF()"]');
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
-        btn.disabled = true;
-
-        const elemento = document.getElementById('seccionGraficas');
-        const canvas = await html2canvas(document.body, {
-            scale: 1.5,
-            useCORS: true,
-            backgroundColor: '#f5f7fa'
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('l', 'mm', 'a4');
-        const pdfW = pdf.internal.pageSize.getWidth();
-        const pdfH = (canvas.height * pdfW) / canvas.width;
-
-        // Si el contenido es más alto que una página, paginamos
-        const pageH = pdf.internal.pageSize.getHeight();
-        let posY = 0;
-        const totalPages = Math.ceil(pdfH / pageH);
-
-        for (let i = 0; i < totalPages; i++) {
-            if (i > 0) pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
-            posY += pageH;
-        }
-
-        pdf.save(`dashboard_estadisticas_${PERIODO}.pdf`);
-        btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF Dashboard';
-        btn.disabled = false;
-    }
-
-    // Filtro de búsqueda individual
-    function actualizarOpciones() {
+// Búsqueda individual — primero tipo, luego seleccionar
+function actualizarOpciones() {
     const tipo = document.getElementById('tipoIndividual').value;
     const select = document.getElementById('selectIndividual');
-    let primero = true;
     Array.from(select.options).forEach(opt => {
-        if (!opt.dataset.tipo) return; // skip el disabled
-        if (opt.dataset.tipo === tipo) {
-            opt.style.display = '';
-            if (primero) {
-                select.value = opt.value;
-                primero = false;
-            }
-        } else {
-            opt.style.display = 'none';
-        }
+        if (!opt.dataset.tipo) return;
+        opt.style.display = opt.dataset.tipo === tipo ? '' : 'none';
     });
+    const primero = Array.from(select.options).find(
+        o => o.dataset.tipo === tipo
+    );
+    if (primero) select.value = primero.value;
 }
-// Ejecutar al cargar
+// Ejecutar al cargar para dejar solo el tipo actual visible
 actualizarOpciones();
 </script>
 {% endblock %}

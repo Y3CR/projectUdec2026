@@ -24,26 +24,38 @@
 <!-- Filtros -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-3">
-        <form method="GET" class="row g-2 align-items-end">
+        <form method="GET" class="row g-2 align-items-end" id="formIndividual">
+
+            <!-- Paso 1: tipo -->
             <div class="col-md-2">
-                <label class="form-label small fw-semibold mb-1">Tipo</label>
-                <select class="form-select form-select-sm" name="tipo" id="tipoSel"
-                        onchange="actualizarOpciones(); this.form.submit()">
-                    <option value="usuario" {% if tipo == 'usuario' %}selected{% endif %}>
-                        Usuario
+                <label class="form-label small fw-semibold mb-1">
+                    <span class="badge bg-ucundi me-1">1</span>Tipo
+                </label>
+                <select class="form-select form-select-sm" name="tipo"
+                        id="tipoSel" onchange="cambiarTipo()">
+                    <option value="usuario"
+                        {% if tipo == 'usuario' %}selected{% endif %}>
+                        👤 Usuario
                     </option>
-                    <option value="recurso" {% if tipo == 'recurso' %}selected{% endif %}>
-                        Recurso
+                    <option value="recurso"
+                        {% if tipo == 'recurso' %}selected{% endif %}>
+                        💻 Recurso
                     </option>
-                    <option value="espacio" {% if tipo == 'espacio' %}selected{% endif %}>
-                        Espacio
+                    <option value="espacio"
+                        {% if tipo == 'espacio' %}selected{% endif %}>
+                        🚪 Espacio
                     </option>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-semibold mb-1">Seleccionar</label>
-                <select class="form-select form-select-sm" name="id" id="itemSel">
+
+            <!-- Paso 2: ítem (solo aparece cuando hay tipo seleccionado) -->
+            <div class="col-md-4" id="colItem">
+                <label class="form-label small fw-semibold mb-1">
+                    <span class="badge bg-secondary me-1">2</span>Seleccionar
+                </label>
+                <select class="form-select form-select-sm" name="id">
                     {% if tipo == 'usuario' %}
+                        <option value="">— Selecciona un usuario —</option>
                         {% for u in usuarios %}
                         <option value="{{ u.id }}"
                             {% if item_id == u.id %}selected{% endif %}>
@@ -52,6 +64,7 @@
                         </option>
                         {% endfor %}
                     {% elif tipo == 'recurso' %}
+                        <option value="">— Selecciona un recurso —</option>
                         {% for r in recursos_lista %}
                         <option value="{{ r.id }}"
                             {% if item_id == r.id %}selected{% endif %}>
@@ -59,6 +72,7 @@
                         </option>
                         {% endfor %}
                     {% elif tipo == 'espacio' %}
+                        <option value="">— Selecciona un espacio —</option>
                         {% for e in espacios %}
                         <option value="{{ e.id }}"
                             {% if item_id == e.id %}selected{% endif %}>
@@ -68,15 +82,27 @@
                     {% endif %}
                 </select>
             </div>
+
+            <!-- Período -->
             <div class="col-md-3">
-                <label class="form-label small fw-semibold mb-1">Período</label>
+                <label class="form-label small fw-semibold mb-1">
+                    <span class="badge bg-secondary me-1">3</span>Período
+                </label>
                 <select class="form-select form-select-sm" name="periodo">
-                    {% for p, l in [('semana','Última semana'), ('mes','Último mes'),
-                                    ('trimestre','Último trimestre'), ('anio','Este año')] %}
-                    <option value="{{ p }}" {% if periodo == p %}selected{% endif %}>{{ l }}</option>
+                    {% for p, l in [
+                        ('semana', '📅 Última semana — por día'),
+                        ('mes',    '📅 Último mes — por día'),
+                        ('trimestre', '📅 Trimestre — por semana'),
+                        ('anio',   '📅 Este año — por mes')
+                    ] %}
+                    <option value="{{ p }}"
+                        {% if periodo == p %}selected{% endif %}>
+                        {{ l }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
+
             <div class="col-auto">
                 <button type="submit" class="btn btn-ucundi btn-sm">
                     <i class="bi bi-search me-1"></i>Analizar
@@ -86,6 +112,15 @@
     </div>
 </div>
 
+<script>
+function cambiarTipo() {
+    // Al cambiar el tipo, redirige con el nuevo tipo y sin id
+    // para que el servidor devuelva la lista correcta
+    const tipo = document.getElementById('tipoSel').value;
+    const periodo = document.querySelector('select[name="periodo"]').value;
+    window.location.href = `/estadisticas/individual?tipo=${tipo}&periodo=${periodo}`;
+}
+</script>
 {% if item %}
 
 <!-- KPIs del elemento seleccionado -->
@@ -275,19 +310,23 @@
     const PERIODO = "{{ periodo }}";
 
     {% if item %}
-    fetch(`/estadisticas/api/individual/solicitudes-por-mes?tipo=${TIPO}&id=${ITEM_ID}`)
-        .then(r => r.json()).then(d => {
+    fetch(`/estadisticas/api/individual/solicitudes-por-mes?tipo=${TIPO}&id=${ITEM_ID}&periodo=${PERIODO}`)
+        .then(r => r.json())
+        .then(d => {
             const ctx = document.getElementById('chartIndividual');
             if (!ctx) return;
-            charts['chartIndividual'] = new Chart(ctx, {
-                type: 'bar',
+            chartIndividual = new Chart(ctx, {
+                type: PERIODO === 'semana' ? 'line' : 'bar',
                 data: {
                     labels: d.labels,
                     datasets: [{
                         label: 'Actividad',
                         data: d.data,
                         backgroundColor: '#1b4332',
-                        borderRadius: 4
+                        borderColor: '#1b4332',
+                        borderRadius: 4,
+                        tension: 0.3,
+                        fill: PERIODO === 'semana'
                     }]
                 },
                 options: {
@@ -298,7 +337,6 @@
             });
         });
     {% endif %}
-
     function descargarGrafica(chartId, nombre) {
         const chart = charts[chartId];
         if (!chart) return;
