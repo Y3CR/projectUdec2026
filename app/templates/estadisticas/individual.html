@@ -22,17 +22,19 @@
 </div>
 
 <!-- Filtros -->
+
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-3">
-        <form method="GET" class="row g-2 align-items-end" id="formIndividual">
+        <form method="GET" class="row g-2 align-items-end"
+              id="formIndividual">
 
-            <!-- Paso 1: tipo -->
+            <!-- Tipo -->
             <div class="col-md-2">
                 <label class="form-label small fw-semibold mb-1">
                     <span class="badge bg-ucundi me-1">1</span>Tipo
                 </label>
                 <select class="form-select form-select-sm" name="tipo"
-                        id="tipoSel" onchange="cambiarTipo()">
+                        onchange="cambiarTipo()">
                     <option value="usuario"
                         {% if tipo == 'usuario' %}selected{% endif %}>
                         👤 Usuario
@@ -48,8 +50,8 @@
                 </select>
             </div>
 
-            <!-- Paso 2: ítem (solo aparece cuando hay tipo seleccionado) -->
-            <div class="col-md-4" id="colItem">
+            <!-- Ítem -->
+            <div class="col-md-3">
                 <label class="form-label small fw-semibold mb-1">
                     <span class="badge bg-secondary me-1">2</span>Seleccionar
                 </label>
@@ -84,16 +86,19 @@
             </div>
 
             <!-- Período -->
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small fw-semibold mb-1">
                     <span class="badge bg-secondary me-1">3</span>Período
                 </label>
-                <select class="form-select form-select-sm" name="periodo">
+                <select class="form-select form-select-sm" name="periodo"
+                        id="selectPeriodo"
+                        onchange="toggleFechas()">
                     {% for p, l in [
-                        ('semana', '📅 Última semana — por día'),
-                        ('mes',    '📅 Último mes — por día'),
-                        ('trimestre', '📅 Trimestre — por semana'),
-                        ('anio',   '📅 Este año — por mes')
+                        ('semana',      '📅 Última semana'),
+                        ('mes',         '📅 Último mes'),
+                        ('trimestre',   '📅 Último trimestre'),
+                        ('anio',        '📅 Este año'),
+                        ('personalizado','📅 Personalizado')
                     ] %}
                     <option value="{{ p }}"
                         {% if periodo == p %}selected{% endif %}>
@@ -101,6 +106,27 @@
                     </option>
                     {% endfor %}
                 </select>
+            </div>
+
+            <!-- Desde/Hasta (solo si personalizado) -->
+            <div class="col-md-2" id="colDesde"
+                 style="{% if periodo != 'personalizado' %}display:none;{% endif %}">
+                <label class="form-label small fw-semibold mb-1">Desde</label>
+                <input type="date"
+                       class="form-control form-control-sm"
+                       name="fecha_desde"
+                       value="{{ fecha_desde }}"
+                       id="inputDesde">
+            </div>
+
+            <div class="col-md-2" id="colHasta"
+                 style="{% if periodo != 'personalizado' %}display:none;{% endif %}">
+                <label class="form-label small fw-semibold mb-1">Hasta</label>
+                <input type="date"
+                       class="form-control form-control-sm"
+                       name="fecha_hasta"
+                       value="{{ fecha_hasta }}"
+                       id="inputHasta">
             </div>
 
             <div class="col-auto">
@@ -310,7 +336,40 @@ function cambiarTipo() {
     const PERIODO = "{{ periodo }}";
 
     {% if item %}
-    fetch(`/estadisticas/api/individual/solicitudes-por-mes?tipo=${TIPO}&id=${ITEM_ID}&periodo=${PERIODO}`)
+  //  const FECHA_DESDE = "{{ request.args.get('fecha_desde', '') }}";
+    const FECHA_DESDE = "{{ fecha_desde }}";
+    const FECHA_HASTA = "{{ fecha_hasta }}";
+
+
+    function toggleFechas() {
+    const p = document.getElementById('selectPeriodo').value;
+    const mostrar = p === 'personalizado';
+    document.getElementById('colDesde').style.display = mostrar ? '' : 'none';
+    document.getElementById('colHasta').style.display = mostrar ? '' : 'none';
+    }
+
+    function toggleFechas() {
+    const p = document.getElementById('selectPeriodo').value;
+    const mostrar = p === 'personalizado';
+    document.getElementById('colDesde').style.display = mostrar ? '' : 'none';
+    document.getElementById('colHasta').style.display = mostrar ? '' : 'none';
+
+    }
+
+    function cambiarTipo() {
+    const tipo = document.querySelector('select[name="tipo"]').value;
+    const periodo = document.getElementById('selectPeriodo').value;
+    const desde = document.getElementById('inputDesde')?.value || '';
+    const hasta = document.getElementById('inputHasta')?.value || '';
+    window.location.href =
+        `/estadisticas/individual?tipo=${tipo}&periodo=${periodo}`
+        + `&fecha_desde=${desde}&fecha_hasta=${hasta}`; 
+    }
+
+    {% if item %}
+    fetch(`/estadisticas/api/individual/solicitudes-por-mes`
+        + `?tipo=${TIPO}&id=${ITEM_ID}&periodo=${PERIODO}`
+        + `&fecha_desde=${FECHA_DESDE}&fecha_hasta=${FECHA_HASTA}`)
         .then(r => r.json())
         .then(d => {
             const ctx = document.getElementById('chartIndividual');
@@ -332,11 +391,14 @@ function cambiarTipo() {
                 options: {
                     responsive: true,
                     plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    }
                 }
             });
         });
     {% endif %}
+
     function descargarGrafica(chartId, nombre) {
         const chart = charts[chartId];
         if (!chart) return;

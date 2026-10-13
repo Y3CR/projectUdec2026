@@ -32,30 +32,59 @@
 <!-- Filtro de período -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-2">
-        <form method="GET" class="d-flex flex-wrap gap-2 align-items-center" id="formFiltro">
+        <form method="GET" id="formFiltro"
+              class="d-flex flex-wrap gap-2 align-items-center">
             <label class="small fw-semibold text-muted mb-0">Período:</label>
-            {% for p, label in [('semana','Última semana'), ('mes','Último mes'),
-                                 ('trimestre','Último trimestre'), ('anio','Este año'),
-                                 ('personalizado','Personalizado')] %}
+
+            {% for p, label in [
+                ('semana','Última semana'),
+                ('mes','Último mes'),
+                ('trimestre','Último trimestre'),
+                ('anio','Este año'),
+                ('personalizado','Personalizado')
+            ] %}
             <a href="{{ url_for('estadisticas.dashboard', periodo=p) }}"
-               class="btn btn-sm {% if periodo == p %}btn-ucundi{% else %}btn-outline-secondary{% endif %}">
+               class="btn btn-sm
+                      {% if periodo == p %}btn-ucundi
+                      {% else %}btn-outline-secondary{% endif %}">
                 {{ label }}
             </a>
             {% endfor %}
 
             {% if periodo == 'personalizado' %}
-            <input type="date" class="form-control form-control-sm w-auto"
-                   name="fecha_desde" value="{{ fecha_desde }}"
-                   onchange="this.form.submit()">
-            <span class="text-muted small">hasta</span>
-            <input type="date" class="form-control form-control-sm w-auto"
-                   name="fecha_hasta" value="{{ fecha_hasta }}"
-                   onchange="this.form.submit()">
-            <input type="hidden" name="periodo" value="personalizado">
+            <form method="GET"
+                  class="d-flex align-items-center gap-2 flex-wrap ms-2"
+                  id="formPersonalizado">
+                <input type="hidden" name="periodo" value="personalizado">
+                <div class="d-flex align-items-center gap-1">
+                    <label class="small text-muted mb-0">Desde:</label>
+                    <input type="date"
+                           class="form-control form-control-sm"
+                           style="width:150px;"
+                           name="fecha_desde"
+                           value="{{ fecha_desde }}"
+                           id="inputDesde">
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <label class="small text-muted mb-0">Hasta:</label>
+                    <input type="date"
+                           class="form-control form-control-sm"
+                           style="width:150px;"
+                           name="fecha_hasta"
+                           value="{{ fecha_hasta }}"
+                           id="inputHasta">
+                </div>
+                <button type="submit" class="btn btn-ucundi btn-sm">
+                    <i class="bi bi-search me-1"></i>Aplicar
+                </button>
+            </form>
             {% endif %}
+
         </form>
     </div>
 </div>
+
+
 
 <!-- KPIs -->
 <!-- KPIs según tipo -->

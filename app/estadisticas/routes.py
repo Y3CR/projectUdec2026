@@ -24,9 +24,26 @@ def admin_o_operador(f):
     return decorated
 
 
-def _rango_fechas(periodo):
-    """Retorna (fecha_inicio, fecha_fin) según el período seleccionado."""
+def _rango_fechas(periodo, fecha_desde_str='', fecha_hasta_str=''):
+    """Retorna (fecha_inicio, fecha_fin) según el período."""
     ahora = datetime.now(BOGOTA_TZ).replace(tzinfo=None)
+
+    if periodo == 'personalizado':
+        fecha_ini = None
+        fecha_fin = None
+        try:
+            if fecha_desde_str:
+                fecha_ini = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+        try:
+            if fecha_hasta_str:
+                fecha_fin = (datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                             + timedelta(days=1))
+        except ValueError:
+            pass
+        return fecha_ini, fecha_fin
+
     if periodo == 'semana':
         return ahora - timedelta(days=7), ahora
     elif periodo == 'mes':
@@ -35,8 +52,8 @@ def _rango_fechas(periodo):
         return ahora - timedelta(days=90), ahora
     elif periodo == 'anio':
         return ahora - timedelta(days=365), ahora
-    else:  # personalizado o todo
-        return None, None
+    return None, None
+
 
 
 # ── Dashboard principal ────────────────────────────────────────────────────────
@@ -49,18 +66,10 @@ def dashboard():
     fecha_desde_str = request.args.get('fecha_desde', '')
     fecha_hasta_str = request.args.get('fecha_hasta', '')
 
-    fecha_ini, fecha_fin = _rango_fechas(periodo)
+    fecha_ini, fecha_fin = _rango_fechas(
+        periodo, fecha_desde_str, fecha_hasta_str
+    )
 
-    if periodo == 'personalizado':
-        try:
-            if fecha_desde_str:
-                fecha_ini = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
-            if fecha_hasta_str:
-                fecha_fin = datetime.strptime(fecha_hasta_str, '%Y-%m-%d') + timedelta(days=1)
-        except ValueError:
-            pass
-
-    # ── KPIs resumen ──────────────────────────────────────────────────────────
     q_base = Solicitud.query
     if fecha_ini:
         q_base = q_base.filter(Solicitud.fecha_creacion >= fecha_ini)
@@ -69,30 +78,28 @@ def dashboard():
 
     kpis = {
         'total_solicitudes': q_base.count(),
-        'aprobadas': q_base.filter(Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])).count(),
-        'rechazadas': q_base.filter(Solicitud.estado == 'rechazada').count(),
-        'en_uso': Solicitud.query.filter_by(estado='entregado', tipo='recurso').count(),
-        'recursos_disponibles': Recurso.query.filter_by(estado='disponible').count(),
+        'aprobadas': q_base.filter(
+            Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
+        ).count(),
+        'rechazadas': q_base.filter(
+            Solicitud.estado == 'rechazada'
+        ).count(),
+        'en_uso': Solicitud.query.filter_by(
+            estado='entregado', tipo='recurso'
+        ).count(),
+        'recursos_disponibles': Recurso.query.filter_by(
+            estado='disponible'
+        ).count(),
         'total_recursos': Recurso.query.count(),
         'total_usuarios_activos': User.query.filter_by(activo=True).count(),
-        'accesos_rfid': RegistroAcceso.query.filter(
-            RegistroAcceso.fecha_evento >= fecha_ini
-        ).count() if fecha_ini else RegistroAcceso.query.count(),
+        'accesos_rfid': (
+            RegistroAcceso.query.filter(
+                RegistroAcceso.fecha_evento >= fecha_ini
+            ).count() if fecha_ini
+            else RegistroAcceso.query.count()
+        ),
     }
 
-    # Usuarios para filtro individual
-    #usuarios = User.query.filter(
-    #    User.activo == True,
-    #    User.role.has(db.or_(
-    #        *[User.role_id == r for r in [
-    #            db.session.query(db.Column).from_statement(
-    #                db.text("SELECT id FROM roles WHERE name IN ('docente','estudiante')")
-    #            )
-    #        ]]
-    #    ))
-    #).order_by(User.nombre).all()
-
-    # Más simple: traer docentes y estudiantes
     from app.models import Role
     roles_ids = [r.id for r in Role.query.filter(
         Role.name.in_(['docente', 'estudiante'])
@@ -113,8 +120,6 @@ def dashboard():
                            usuarios=usuarios,
                            espacios=espacios,
                            recursos_lista=recursos_lista)
-
-
 # ── APIs de datos para Chart.js ────────────────────────────────────────────────
 
 @bp.route('/api/solicitudes-por-estado')
@@ -142,44 +147,93 @@ def api_solicitudes_estado():
     })
 
 
+
 @bp.route('/api/solicitudes-por-mes')
 @login_required
 @admin_o_operador
 def api_solicitudes_mes():
-    # Últimos 12 meses
+    periodo = request.args.get('periodo', 'mes')
     ahora = datetime.now(BOGOTA_TZ).replace(tzinfo=None)
-    labels = []
-    aprobadas = []
-    rechazadas = []
-    totales = []
+    labels, aprobadas, rechazadas, totales = [], [], [], []
 
-    for i in range(11, -1, -1):
-        fecha = ahora - timedelta(days=30 * i)
-        mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
-        if i == 0:
-            mes_fin = ahora
-        else:
-            siguiente = fecha.replace(day=28) + timedelta(days=4)
-            mes_fin = siguiente.replace(day=1)
+    if periodo == 'semana':
+        # Últimos 7 días agrupados por día
+        for i in range(6, -1, -1):
+            fecha = ahora - timedelta(days=i)
+            ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+            fin = fecha.replace(hour=23, minute=59, second=59)
+            labels.append(fecha.strftime('%a %d/%m'))
+            q = Solicitud.query.filter(
+                Solicitud.fecha_creacion >= ini,
+                Solicitud.fecha_creacion <= fin
+            )
+            totales.append(q.count())
+            aprobadas.append(q.filter(
+                Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
+            ).count())
+            rechazadas.append(q.filter(
+                Solicitud.estado == 'rechazada'
+            ).count())
 
-        labels.append(fecha.strftime('%b %Y'))
-        total = Solicitud.query.filter(
-            Solicitud.fecha_creacion >= mes_ini,
-            Solicitud.fecha_creacion < mes_fin
-        ).count()
-        apr = Solicitud.query.filter(
-            Solicitud.fecha_creacion >= mes_ini,
-            Solicitud.fecha_creacion < mes_fin,
-            Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
-        ).count()
-        rec = Solicitud.query.filter(
-            Solicitud.fecha_creacion >= mes_ini,
-            Solicitud.fecha_creacion < mes_fin,
-            Solicitud.estado == 'rechazada'
-        ).count()
-        totales.append(total)
-        aprobadas.append(apr)
-        rechazadas.append(rec)
+    elif periodo == 'mes':
+        # Últimos 30 días agrupados por día
+        for i in range(29, -1, -1):
+            fecha = ahora - timedelta(days=i)
+            ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+            fin = fecha.replace(hour=23, minute=59, second=59)
+            labels.append(fecha.strftime('%d/%m'))
+            q = Solicitud.query.filter(
+                Solicitud.fecha_creacion >= ini,
+                Solicitud.fecha_creacion <= fin
+            )
+            totales.append(q.count())
+            aprobadas.append(q.filter(
+                Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
+            ).count())
+            rechazadas.append(q.filter(
+                Solicitud.estado == 'rechazada'
+            ).count())
+
+    elif periodo == 'trimestre':
+        # Últimas 13 semanas agrupadas por semana
+        for i in range(12, -1, -1):
+            fin = ahora - timedelta(weeks=i)
+            ini = fin - timedelta(days=6)
+            labels.append(f"S {fin.strftime('%d/%m')}")
+            q = Solicitud.query.filter(
+                Solicitud.fecha_creacion >= ini,
+                Solicitud.fecha_creacion <= fin
+            )
+            totales.append(q.count())
+            aprobadas.append(q.filter(
+                Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
+            ).count())
+            rechazadas.append(q.filter(
+                Solicitud.estado == 'rechazada'
+            ).count())
+
+    else:
+        # anio o personalizado: últimos 12 meses agrupados por mes
+        for i in range(11, -1, -1):
+            fecha = ahora - timedelta(days=30 * i)
+            mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
+            if i == 0:
+                mes_fin = ahora
+            else:
+                siguiente = fecha.replace(day=28) + timedelta(days=4)
+                mes_fin = siguiente.replace(day=1)
+            labels.append(fecha.strftime('%b %Y'))
+            q = Solicitud.query.filter(
+                Solicitud.fecha_creacion >= mes_ini,
+                Solicitud.fecha_creacion < mes_fin
+            )
+            totales.append(q.count())
+            aprobadas.append(q.filter(
+                Solicitud.estado.in_(['aprobada', 'entregado', 'devuelta'])
+            ).count())
+            rechazadas.append(q.filter(
+                Solicitud.estado == 'rechazada'
+            ).count())
 
     return jsonify({
         'labels': labels,
@@ -189,6 +243,10 @@ def api_solicitudes_mes():
             {'label': 'Rechazadas', 'data': rechazadas, 'color': '#dc3545'},
         ]
     })
+
+
+
+
 
 
 @bp.route('/api/recursos-mas-solicitados')
@@ -348,6 +406,7 @@ def api_usuarios_activos():
 
 # ── Estadística individual ─────────────────────────────────────────────────────
 
+
 @bp.route('/individual')
 @login_required
 @admin_o_operador
@@ -355,9 +414,13 @@ def individual():
     tipo = request.args.get('tipo', 'usuario')
     item_id = request.args.get('id', 0, type=int)
     periodo = request.args.get('periodo', 'mes')
-    fecha_ini, fecha_fin = _rango_fechas(periodo)
+    fecha_desde_str = request.args.get('fecha_desde', '')
+    fecha_hasta_str = request.args.get('fecha_hasta', '')
 
-   
+    fecha_ini, fecha_fin = _rango_fechas(
+        periodo, fecha_desde_str, fecha_hasta_str
+    )
+
     from app.models import Role
     roles_ids = [r.id for r in Role.query.filter(
         Role.name.in_(['docente', 'estudiante'])
@@ -374,6 +437,8 @@ def individual():
         'tipo': tipo,
         'item_id': item_id,
         'periodo': periodo,
+        'fecha_desde': fecha_desde_str,
+        'fecha_hasta': fecha_hasta_str,
         'usuarios': usuarios,
         'espacios': espacios,
         'recursos_lista': recursos_lista,
@@ -389,17 +454,20 @@ def individual():
                 q = q.filter(Solicitud.fecha_creacion >= fecha_ini)
             if fecha_fin:
                 q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
-
-            solicitudes = q.all()
+            todas = q.order_by(Solicitud.fecha_creacion.desc()).all()
             contexto['item'] = usuario
             contexto['datos'] = {
-                'total': len(solicitudes),
-                'aprobadas': sum(1 for s in solicitudes
-                                 if s.estado in ['aprobada', 'entregado', 'devuelta']),
-                'rechazadas': sum(1 for s in solicitudes if s.estado == 'rechazada'),
-                'en_uso': sum(1 for s in solicitudes if s.estado == 'entregado'),
-                'tiempo_total': sum(s.tiempo_uso_minutos or 0 for s in solicitudes),
-                'solicitudes': solicitudes[-10:]
+                'total': len(todas),
+                'aprobadas': sum(1 for s in todas
+                                 if s.estado in ['aprobada', 'entregado',
+                                                  'devuelta']),
+                'rechazadas': sum(1 for s in todas
+                                  if s.estado == 'rechazada'),
+                'en_uso': sum(1 for s in todas
+                              if s.estado == 'entregado'),
+                'tiempo_total': sum(s.tiempo_uso_minutos or 0
+                                    for s in todas),
+                'solicitudes': todas[:10]
             }
 
     elif tipo == 'recurso' and item_id:
@@ -410,18 +478,19 @@ def individual():
                 q = q.filter(Solicitud.fecha_creacion >= fecha_ini)
             if fecha_fin:
                 q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
-
-            solicitudes = q.all()
+            todas = q.order_by(Solicitud.fecha_creacion.desc()).all()
+            con_tiempo = [s for s in todas if s.tiempo_uso_minutos]
+            tiempo_prom = (
+                sum(s.tiempo_uso_minutos for s in con_tiempo)
+                // len(con_tiempo) if con_tiempo else 0
+            )
             contexto['item'] = recurso
             contexto['datos'] = {
-                'total_solicitudes': len(solicitudes),
-                'veces_prestado': sum(1 for s in solicitudes
+                'total_solicitudes': len(todas),
+                'veces_prestado': sum(1 for s in todas
                                       if s.estado in ['entregado', 'devuelta']),
-                'tiempo_promedio': (
-                    sum(s.tiempo_uso_minutos or 0 for s in solicitudes) //
-                    max(1, sum(1 for s in solicitudes if s.tiempo_uso_minutos))
-                ),
-                'solicitudes': solicitudes[-10:]
+                'tiempo_promedio': tiempo_prom,
+                'solicitudes': todas[:10]
             }
 
     elif tipo == 'espacio' and item_id:
@@ -432,17 +501,18 @@ def individual():
                 q = q.filter(RegistroAcceso.fecha_evento >= fecha_ini)
             if fecha_fin:
                 q = q.filter(RegistroAcceso.fecha_evento <= fecha_fin)
-
-            accesos = q.all()
+            todos = q.order_by(RegistroAcceso.fecha_evento.desc()).all()
             contexto['item'] = espacio
             contexto['datos'] = {
-                'total_accesos': len(accesos),
-                'permitidos': sum(1 for a in accesos if a.autorizado),
-                'denegados': sum(1 for a in accesos if not a.autorizado),
-                'accesos': accesos[-10:]
+                'total_accesos': len(todos),
+                'permitidos': sum(1 for a in todos if a.autorizado),
+                'denegados': sum(1 for a in todos if not a.autorizado),
+                'accesos': todos[:10]
             }
 
     return render_template('estadisticas/individual.html', **contexto)
+
+
 
 @bp.route('/api/individual/solicitudes-por-mes')
 @login_required
@@ -451,59 +521,104 @@ def api_individual_solicitudes():
     tipo = request.args.get('tipo', 'usuario')
     item_id = request.args.get('id', 0, type=int)
     periodo = request.args.get('periodo', 'mes')
+    fecha_desde_str = request.args.get('fecha_desde', '')
+    fecha_hasta_str = request.args.get('fecha_hasta', '')
 
     ahora = datetime.now(BOGOTA_TZ).replace(tzinfo=None)
     labels = []
     datos = []
 
-    if periodo == 'semana':
-        # Últimos 7 días agrupados por día
+    if periodo == 'personalizado':
+        # Para personalizado: agrupar por día dentro del rango
+        fecha_ini, fecha_fin = _rango_fechas(
+            'personalizado', fecha_desde_str, fecha_hasta_str
+        )
+        if not fecha_ini:
+            fecha_ini = ahora - timedelta(days=30)
+        if not fecha_fin:
+            fecha_fin = ahora
+
+        diff_dias = (fecha_fin - fecha_ini).days
+
+        if diff_dias <= 31:
+            # Agrupar por día
+            for i in range(diff_dias + 1):
+                fecha = fecha_ini + timedelta(days=i)
+                dia_ini = fecha.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                dia_fin = fecha.replace(hour=23, minute=59, second=59)
+                labels.append(fecha.strftime('%d/%m'))
+                datos.append(_contar_actividad(
+                    tipo, item_id, dia_ini, dia_fin
+                ))
+        elif diff_dias <= 90:
+            # Agrupar por semana
+            semanas = diff_dias // 7 + 1
+            for i in range(semanas):
+                sem_ini = fecha_ini + timedelta(weeks=i)
+                sem_fin = min(sem_ini + timedelta(days=6), fecha_fin)
+                labels.append(f"S {sem_ini.strftime('%d/%m')}")
+                datos.append(_contar_actividad(
+                    tipo, item_id, sem_ini, sem_fin
+                ))
+        else:
+            # Agrupar por mes
+            cursor = fecha_ini.replace(
+                day=1, hour=0, minute=0, second=0
+            )
+            while cursor <= fecha_fin:
+                siguiente = cursor.replace(day=28) + timedelta(days=4)
+                mes_fin = min(siguiente.replace(day=1), fecha_fin)
+                labels.append(cursor.strftime('%b %Y'))
+                datos.append(_contar_actividad(
+                    tipo, item_id, cursor, mes_fin
+                ))
+                cursor = siguiente.replace(day=1)
+
+    elif periodo == 'semana':
         for i in range(6, -1, -1):
             fecha = ahora - timedelta(days=i)
-            dia_ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+            dia_ini = fecha.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             dia_fin = fecha.replace(hour=23, minute=59, second=59)
             labels.append(fecha.strftime('%a %d/%m'))
             datos.append(_contar_actividad(tipo, item_id, dia_ini, dia_fin))
 
     elif periodo == 'mes':
-        # Últimos 30 días agrupados por día
         for i in range(29, -1, -1):
             fecha = ahora - timedelta(days=i)
-            dia_ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+            dia_ini = fecha.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             dia_fin = fecha.replace(hour=23, minute=59, second=59)
             labels.append(fecha.strftime('%d/%m'))
             datos.append(_contar_actividad(tipo, item_id, dia_ini, dia_fin))
 
     elif periodo == 'trimestre':
-        # Últimos 3 meses agrupados por semana
         for i in range(12, -1, -1):
-            semana_fin = ahora - timedelta(weeks=i)
-            semana_ini = semana_fin - timedelta(days=6)
-            labels.append(f"S {semana_fin.strftime('%d/%m')}")
-            datos.append(_contar_actividad(tipo, item_id, semana_ini, semana_fin))
-
-    elif periodo == 'anio':
-        # Últimos 12 meses agrupados por mes
-        for i in range(11, -1, -1):
-            fecha = ahora - timedelta(days=30 * i)
-            mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
-            siguiente = fecha.replace(day=28) + timedelta(days=4)
-            mes_fin = siguiente.replace(day=1) if i > 0 else ahora
-            labels.append(fecha.strftime('%b %Y'))
-            datos.append(_contar_actividad(tipo, item_id, mes_ini, mes_fin))
+            sem_fin = ahora - timedelta(weeks=i)
+            sem_ini = sem_fin - timedelta(days=6)
+            labels.append(f"S {sem_fin.strftime('%d/%m')}")
+            datos.append(_contar_actividad(tipo, item_id, sem_ini, sem_fin))
 
     else:
-        # Default: últimos 12 meses
+        # anio o default: últimos 12 meses por mes
         for i in range(11, -1, -1):
             fecha = ahora - timedelta(days=30 * i)
             mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
-            siguiente = fecha.replace(day=28) + timedelta(days=4)
-            mes_fin = siguiente.replace(day=1) if i > 0 else ahora
+            if i == 0:
+                mes_fin = ahora
+            else:
+                siguiente = fecha.replace(day=28) + timedelta(days=4)
+                mes_fin = siguiente.replace(day=1)
             labels.append(fecha.strftime('%b %Y'))
             datos.append(_contar_actividad(tipo, item_id, mes_ini, mes_fin))
 
-    return jsonify({'labels': labels, 'data': datos, 'color': '#1b4332'})
-
+    return jsonify({'labels': labels, 'data': datos, 'color': '#1b4332'})    
+    
+    
 
 def _contar_actividad(tipo, item_id, fecha_ini, fecha_fin):
     """Helper para contar eventos en un rango de fechas."""
@@ -671,203 +786,199 @@ def exportar_excel():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True, download_name=nombre)
     
-@bp.route('/exportar/csv-ml')
+
+
+@bp.route('/exportar/csv-ml', methods=['GET', 'POST'])
 @login_required
 @admin_o_operador
 def exportar_csv_ml():
-    """
-    Exporta datos en formato óptimo para Machine Learning.
-    Cada fila es una solicitud con features numéricas y categóricas
-    listas para entrenar modelos de predicción.
-    """
     import csv
     from io import StringIO
 
-    solicitudes = Solicitud.query.filter(
-        Solicitud.tipo == 'recurso'
-    ).order_by(Solicitud.fecha_creacion.asc()).all()
+    # Definición de todos los campos disponibles
+    CAMPOS_DISPONIBLES = {
+        'solicitud_id':             'ID de solicitud',
+        'usuario_id':               'ID de usuario',
+        'recurso_id':               'ID de recurso',
+        'anio_creacion':            'Año de creación',
+        'mes_creacion':             'Mes de creación (1-12)',
+        'dia_semana_creacion':      'Día de la semana (0=lun)',
+        'hora_creacion':            'Hora de creación (0-23)',
+        'trimestre_creacion':       'Trimestre (1-4)',
+        'rol_usuario':              'Rol del usuario',
+        'tiene_tarjeta_rfid':       'Tiene tarjeta RFID (0/1)',
+        'total_prestamos_previos':  'Préstamos previos',
+        'total_devoluciones_a_tiempo': 'Devoluciones a tiempo',
+        'total_demoras_previas':    'Demoras previas',
+        'ratio_demoras':            'Ratio de demoras (0-1)',
+        'categoria_recurso':        'Categoría del recurso',
+        'veces_prestado_recurso':   'Veces prestado el recurso',
+        'dias_prestamo_solicitados':'Días de préstamo solicitados',
+        'tiene_motivo':             'Tiene motivo (0/1)',
+        'longitud_motivo':          'Palabras en el motivo',
+        'fue_aprobada':             'TARGET: Fue aprobada (0/1)',
+        'fue_entregada':            'TARGET: Fue entregada (0/1)',
+        'tuvo_demora':              'TARGET: Tuvo demora (0/1)',
+        'tiempo_uso_real_minutos':  'TARGET: Tiempo uso (min)',
+        'tiempo_uso_real_horas':    'TARGET: Tiempo uso (hrs)',
+        'dias_retraso':             'TARGET: Días de retraso',
+        'estado_devolucion':        'TARGET: Estado devolución',
+    }
 
-    output = StringIO()
-    writer = csv.writer(output)
+    # Si es GET, mostrar el formulario
+    if request.method == 'GET':
+        from app.models import Role
+        return render_template(
+            'estadisticas/csv_ml_config.html',
+            campos=CAMPOS_DISPONIBLES
+        )
 
-    # ── Encabezados ──────────────────────────────────────────────────────────
-    writer.writerow([
-        # Identificadores (no usar como features, solo referencia)
-        'solicitud_id',
-        'usuario_id',
-        'recurso_id',
+    # Si es POST, generar el CSV con los parámetros seleccionados
+    campos_sel = request.form.getlist('campos')
+    fecha_desde_str = request.form.get('fecha_desde', '').strip()
+    fecha_hasta_str = request.form.get('fecha_hasta', '').strip()
 
-        # Features temporales
-        'anio_creacion',
-        'mes_creacion',           # 1-12
-        'dia_semana_creacion',    # 0=lunes … 6=domingo
-        'hora_creacion',          # 0-23
-        'trimestre_creacion',     # 1-4
+    if not campos_sel:
+        campos_sel = list(CAMPOS_DISPONIBLES.keys())
 
-        # Features del usuario
-        'rol_usuario',            # docente / estudiante / invitado
-        'tiene_tarjeta_rfid',     # 0 / 1
-        'total_prestamos_previos',
-        'total_devoluciones_a_tiempo',
-        'total_demoras_previas',
-        'ratio_demoras',          # demoras / total_prestamos (0.0-1.0)
+    fecha_ini = None
+    fecha_fin = None
+    try:
+        if fecha_desde_str:
+            fecha_ini = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+        if fecha_hasta_str:
+            fecha_fin = datetime.strptime(fecha_hasta_str, '%Y-%m-%d') \
+                        + timedelta(days=1)
+    except ValueError:
+        pass
 
-        # Features del recurso
-        'categoria_recurso',
-        'veces_prestado_recurso',
-        'estado_recurso_al_solicitar',
+    q = Solicitud.query.filter(Solicitud.tipo == 'recurso')
+    if fecha_ini:
+        q = q.filter(Solicitud.fecha_creacion >= fecha_ini)
+    if fecha_fin:
+        q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
+    solicitudes = q.order_by(Solicitud.fecha_creacion.asc()).all()
 
-        # Features de la solicitud
-        'dias_prestamo_solicitados',  # diferencia fecha_fin - fecha_creacion
-        'tiene_motivo',               # 0 / 1
-        'longitud_motivo',            # nro de palabras
-
-        # Targets (lo que queremos predecir)
-        'fue_aprobada',               # 0 / 1
-        'fue_entregada',              # 0 / 1
-        'tuvo_demora',                # 0 / 1
-        'tiempo_uso_real_minutos',    # null si no fue entregada
-        'tiempo_uso_real_horas',
-        'dias_retraso',               # negativo = devolvió antes, positivo = tarde
-        'estado_devolucion',          # bueno / dañado / perdido / null
-    ])
-
-    # ── Caché de métricas por usuario (para no recalcular en cada fila) ──────
+    # Caché de métricas
     cache_usuario = {}
 
-    def _metricas_usuario(usuario_id, hasta_fecha):
-        key = (usuario_id, hasta_fecha.date() if hasta_fecha else None)
+    def _metricas(usuario_id, hasta):
+        key = (usuario_id, hasta.date() if hasta else None)
         if key in cache_usuario:
             return cache_usuario[key]
-
         anteriores = Solicitud.query.filter(
             Solicitud.usuario_id == usuario_id,
             Solicitud.tipo == 'recurso',
-            Solicitud.fecha_creacion < hasta_fecha
-        ).all() if hasta_fecha else []
-
+            Solicitud.fecha_creacion < hasta
+        ).all() if hasta else []
         total = len(anteriores)
-        demoras = sum(1 for s in anteriores if s.estado == 'en_demora'
-                      or (s.estado == 'devuelta' and s.fecha_devolucion_real
-                          and s.fecha_fin_efectiva()
-                          and s.fecha_devolucion_real > s.fecha_fin_efectiva()))
-        a_tiempo = sum(1 for s in anteriores
-                       if s.estado == 'devuelta' and s.fecha_devolucion_real
-                       and s.fecha_fin_efectiva()
-                       and s.fecha_devolucion_real <= s.fecha_fin_efectiva())
+        demoras = sum(1 for s in anteriores if (
+            s.estado == 'en_demora' or (
+                s.estado == 'devuelta'
+                and s.fecha_devolucion_real
+                and s.fecha_fin_efectiva()
+                and s.fecha_devolucion_real > s.fecha_fin_efectiva()
+            )
+        ))
+        a_tiempo = sum(1 for s in anteriores if (
+            s.estado == 'devuelta'
+            and s.fecha_devolucion_real
+            and s.fecha_fin_efectiva()
+            and s.fecha_devolucion_real <= s.fecha_fin_efectiva()
+        ))
         ratio = round(demoras / total, 4) if total > 0 else 0.0
-
         result = (total, a_tiempo, demoras, ratio)
         cache_usuario[key] = result
         return result
 
-    # ── Caché de veces prestado por recurso ───────────────────────────────────
     cache_recurso = {}
 
-    def _veces_prestado(recurso_id, hasta_fecha):
-        key = (recurso_id, hasta_fecha.date() if hasta_fecha else None)
+    def _veces(recurso_id, hasta):
+        key = (recurso_id, hasta.date() if hasta else None)
         if key in cache_recurso:
             return cache_recurso[key]
         n = Solicitud.query.filter(
             Solicitud.recurso_id == recurso_id,
             Solicitud.tipo == 'recurso',
-            Solicitud.fecha_creacion < hasta_fecha,
+            Solicitud.fecha_creacion < hasta,
             Solicitud.estado.in_(['entregado', 'devuelta', 'en_demora'])
-        ).count() if hasta_fecha else 0
+        ).count() if hasta else 0
         cache_recurso[key] = n
         return n
 
-    # ── Filas ─────────────────────────────────────────────────────────────────
+    # Construir filas
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([CAMPOS_DISPONIBLES[c] for c in campos_sel])
+
     for s in solicitudes:
         fc = s.fecha_creacion
+        u = s.usuario
+        r = s.recurso
 
-        # Features temporales
-        anio = fc.year
-        mes = fc.month
-        dia_semana = fc.weekday()
-        hora = fc.hour
-        trimestre = (mes - 1) // 3 + 1
+        total_prev, a_tiempo_prev, demoras_prev, ratio_dem = _metricas(
+            s.usuario_id, fc
+        )
 
-        # Features usuario
-        usuario = s.usuario
-        rol = usuario.get_role_name() if usuario else 'desconocido'
-        tiene_rfid = 1 if (usuario and usuario.uid_tarjeta) else 0
-        total_prev, a_tiempo_prev, demoras_prev, ratio_dem = \
-            _metricas_usuario(s.usuario_id, fc)
-
-        # Features recurso
-        recurso = s.recurso
-        categoria = recurso.categoria.nombre if recurso else 'desconocida'
-        veces_prest = _veces_prestado(s.recurso_id, fc)
-        estado_rec_al_sol = recurso.estado if recurso else 'desconocido'
-
-        # Features solicitud
         if s.fecha_fin and fc:
             dias_sol = max(0, (s.fecha_fin - fc).days)
         else:
             dias_sol = None
+
         motivo = s.motivo or ''
-        tiene_motivo = 1 if motivo.strip() else 0
-        longitud_motivo = len(motivo.strip().split()) if motivo.strip() else 0
 
-        # Targets
-        fue_aprobada = 1 if s.estado in [
-            'aprobada', 'entregado', 'devuelta', 'en_demora'
-        ] else 0
-        fue_entregada = 1 if s.estado in [
-            'entregado', 'devuelta', 'en_demora'
-        ] else 0
-        tuvo_demora = 1 if (
-            s.estado == 'en_demora'
-            or (s.estado == 'devuelta'
-                and s.fecha_devolucion_real
-                and s.fecha_fin_efectiva()
-                and s.fecha_devolucion_real > s.fecha_fin_efectiva())
-        ) else 0
-
-        tiempo_min = s.tiempo_uso_minutos
-        tiempo_hrs = round(tiempo_min / 60, 2) if tiempo_min else None
-
-        if (s.fecha_devolucion_real and s.fecha_fin_efectiva()):
+        if s.fecha_devolucion_real and s.fecha_fin_efectiva():
             diff = s.fecha_devolucion_real - s.fecha_fin_efectiva()
             dias_retraso = round(diff.total_seconds() / 86400, 2)
         else:
             dias_retraso = None
 
-        estado_dev = s.estado_devolucion or None
+        tiempo_min = s.tiempo_uso_minutos
 
-        writer.writerow([
-            s.id,
-            s.usuario_id,
-            s.recurso_id,
-            anio,
-            mes,
-            dia_semana,
-            hora,
-            trimestre,
-            rol,
-            tiene_rfid,
-            total_prev,
-            a_tiempo_prev,
-            demoras_prev,
-            ratio_dem,
-            categoria,
-            veces_prest,
-            estado_rec_al_sol,
-            dias_sol,
-            tiene_motivo,
-            longitud_motivo,
-            fue_aprobada,
-            fue_entregada,
-            tuvo_demora,
-            tiempo_min,
-            tiempo_hrs,
-            dias_retraso,
-            estado_dev,
-        ])
+        todos_valores = {
+            'solicitud_id':             s.id,
+            'usuario_id':               s.usuario_id,
+            'recurso_id':               s.recurso_id,
+            'anio_creacion':            fc.year,
+            'mes_creacion':             fc.month,
+            'dia_semana_creacion':      fc.weekday(),
+            'hora_creacion':            fc.hour,
+            'trimestre_creacion':       (fc.month - 1) // 3 + 1,
+            'rol_usuario':              u.get_role_name() if u else '',
+            'tiene_tarjeta_rfid':       1 if (u and u.uid_tarjeta) else 0,
+            'total_prestamos_previos':  total_prev,
+            'total_devoluciones_a_tiempo': a_tiempo_prev,
+            'total_demoras_previas':    demoras_prev,
+            'ratio_demoras':            ratio_dem,
+            'categoria_recurso':        r.categoria.nombre if r else '',
+            'veces_prestado_recurso':   _veces(s.recurso_id, fc),
+            'dias_prestamo_solicitados': dias_sol,
+            'tiene_motivo':             1 if motivo.strip() else 0,
+            'longitud_motivo':          len(motivo.strip().split()) if motivo.strip() else 0,
+            'fue_aprobada':             1 if s.estado in [
+                'aprobada', 'entregado', 'devuelta', 'en_demora'
+            ] else 0,
+            'fue_entregada':            1 if s.estado in [
+                'entregado', 'devuelta', 'en_demora'
+            ] else 0,
+            'tuvo_demora':              1 if (
+                s.estado == 'en_demora' or (
+                    s.estado == 'devuelta'
+                    and s.fecha_devolucion_real
+                    and s.fecha_fin_efectiva()
+                    and s.fecha_devolucion_real > s.fecha_fin_efectiva()
+                )
+            ) else 0,
+            'tiempo_uso_real_minutos':  tiempo_min,
+            'tiempo_uso_real_horas':    round(tiempo_min / 60, 2) if tiempo_min else None,
+            'dias_retraso':             dias_retraso,
+            'estado_devolucion':        s.estado_devolucion or '',
+        }
+
+        writer.writerow([todos_valores[c] for c in campos_sel])
 
     output.seek(0)
-    buf = BytesIO(output.getvalue().encode('utf-8-sig'))  # utf-8-sig para Excel
+    buf = BytesIO(output.getvalue().encode('utf-8-sig'))
     nombre = f"ml_prestamos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     return send_file(
         buf,
