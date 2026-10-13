@@ -2,18 +2,22 @@
 {% block title %}Estadística Individual — UCundinamarca{% endblock %}
 
 {% block content %}
-
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="fw-bold mb-0">
-            <i class="bi bi-person-lines-fill me-2 text-ucundi"></i>Estadística Individual
+            <i class="bi bi-person-lines-fill me-2 text-ucundi"></i>
+            Estadística Individual
         </h2>
-        <p class="text-muted small mb-0">Análisis detallado por usuario, recurso o espacio</p>
+        <p class="text-muted small mb-0">
+            Análisis detallado por usuario, recurso o espacio
+        </p>
     </div>
     <div class="d-flex gap-2">
+        {% if item %}
         <button class="btn btn-outline-danger btn-sm" onclick="exportarPDF()">
             <i class="bi bi-file-earmark-pdf me-1"></i>PDF
         </button>
+        {% endif %}
         <a href="{{ url_for('estadisticas.dashboard') }}"
            class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Dashboard
@@ -21,12 +25,10 @@
     </div>
 </div>
 
-<!-- Filtros -->
-
+<!-- Formulario de filtros -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-3">
-        <form method="GET" class="row g-2 align-items-end"
-              id="formIndividual">
+        <form method="GET" class="row g-2 align-items-end" id="formIndividual">
 
             <!-- Tipo -->
             <div class="col-md-2">
@@ -91,42 +93,48 @@
                     <span class="badge bg-secondary me-1">3</span>Período
                 </label>
                 <select class="form-select form-select-sm" name="periodo"
-                        id="selectPeriodo"
-                        onchange="toggleFechas()">
-                    {% for p, l in [
-                        ('semana',      '📅 Última semana'),
-                        ('mes',         '📅 Último mes'),
-                        ('trimestre',   '📅 Último trimestre'),
-                        ('anio',        '📅 Este año'),
-                        ('personalizado','📅 Personalizado')
-                    ] %}
-                    <option value="{{ p }}"
-                        {% if periodo == p %}selected{% endif %}>
-                        {{ l }}
+                        id="selectPeriodo" onchange="toggleFechas()">
+                    <option value="semana"
+                        {% if periodo == 'semana' %}selected{% endif %}>
+                        📅 Última semana
                     </option>
-                    {% endfor %}
+                    <option value="mes"
+                        {% if periodo == 'mes' %}selected{% endif %}>
+                        📅 Último mes
+                    </option>
+                    <option value="trimestre"
+                        {% if periodo == 'trimestre' %}selected{% endif %}>
+                        📅 Último trimestre
+                    </option>
+                    <option value="anio"
+                        {% if periodo == 'anio' %}selected{% endif %}>
+                        📅 Este año
+                    </option>
+                    <option value="personalizado"
+                        {% if periodo == 'personalizado' %}selected{% endif %}>
+                        📅 Personalizado
+                    </option>
                 </select>
             </div>
 
-            <!-- Desde/Hasta (solo si personalizado) -->
+            <!-- Desde -->
             <div class="col-md-2" id="colDesde"
-                 style="{% if periodo != 'personalizado' %}display:none;{% endif %}">
+                 style="display:{% if periodo == 'personalizado' %}block{% else %}none{% endif %};">
                 <label class="form-label small fw-semibold mb-1">Desde</label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="date" class="form-control form-control-sm"
                        name="fecha_desde"
-                       value="{{ fecha_desde }}"
-                       id="inputDesde">
+                       id="inputDesde"
+                       value="{{ fecha_desde }}">
             </div>
 
+            <!-- Hasta -->
             <div class="col-md-2" id="colHasta"
-                 style="{% if periodo != 'personalizado' %}display:none;{% endif %}">
+                 style="display:{% if periodo == 'personalizado' %}block{% else %}none{% endif %};">
                 <label class="form-label small fw-semibold mb-1">Hasta</label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="date" class="form-control form-control-sm"
                        name="fecha_hasta"
-                       value="{{ fecha_hasta }}"
-                       id="inputHasta">
+                       id="inputHasta"
+                       value="{{ fecha_hasta }}">
             </div>
 
             <div class="col-auto">
@@ -138,23 +146,14 @@
     </div>
 </div>
 
-<script>
-function cambiarTipo() {
-    // Al cambiar el tipo, redirige con el nuevo tipo y sin id
-    // para que el servidor devuelva la lista correcta
-    const tipo = document.getElementById('tipoSel').value;
-    const periodo = document.querySelector('select[name="periodo"]').value;
-    window.location.href = `/estadisticas/individual?tipo=${tipo}&periodo=${periodo}`;
-}
-</script>
 {% if item %}
+<div id="seccionIndividual">
 
-<!-- KPIs del elemento seleccionado -->
-<div class="card border-0 shadow-sm mb-4" id="seccionIndividual">
-    <div class="card-body">
-        <div class="d-flex align-items-center gap-3 mb-4">
-            <div class="rounded-circle d-flex align-items-center justify-content-center
-                        text-white fw-bold fs-4 flex-shrink-0"
+    <!-- Encabezado del elemento -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex align-items-center gap-3 py-3">
+            <div class="rounded-circle d-flex align-items-center
+                        justify-content-center text-white fw-bold fs-4 flex-shrink-0"
                  style="width:52px;height:52px;background:#1b4332;">
                 {% if tipo == 'usuario' %}
                     {{ item.nombre[0] }}{{ item.apellido[0] }}
@@ -166,150 +165,294 @@ function cambiarTipo() {
             </div>
             <div>
                 {% if tipo == 'usuario' %}
-                <h5 class="fw-bold mb-0">{{ item.nombre }} {{ item.apellido }}</h5>
-                <span class="badge bg-ucundi">{{ item.get_role_name() | capitalize }}</span>
+                <h5 class="fw-bold mb-0">
+                    {{ item.nombre }} {{ item.apellido }}
+                </h5>
+                <span class="badge bg-ucundi">
+                    {{ item.get_role_name() | capitalize }}
+                </span>
                 <span class="text-muted small ms-2">{{ item.email }}</span>
+                {% if item.uid_tarjeta %}
+                <br>
+                <span class="small text-muted">
+                    Tarjeta: <code>{{ item.uid_tarjeta }}</code>
+                </span>
+                {% endif %}
                 {% elif tipo == 'recurso' %}
                 <h5 class="fw-bold mb-0">{{ item.nombre }}</h5>
-                <span class="badge bg-secondary">{{ item.categoria.nombre }}</span>
-                <code class="small ms-2">{{ item.serial or item.codigo_interno or '' }}</code>
+                <span class="badge bg-secondary">
+                    {{ item.categoria.nombre }}
+                </span>
+                <code class="small ms-2">
+                    {{ item.serial or item.codigo_interno or '' }}
+                </code>
                 {% else %}
                 <h5 class="fw-bold mb-0">{{ item.nombre }}</h5>
                 <span class="badge bg-secondary">{{ item.tipo.nombre }}</span>
-                <span class="text-muted small ms-2">{{ item.ubicacion or '' }}</span>
+                <span class="text-muted small ms-2">
+                    {{ item.ubicacion or '' }}
+                </span>
                 {% endif %}
             </div>
         </div>
+    </div>
 
-        <!-- KPIs según tipo -->
-        <div class="row g-3 mb-4">
-            {% if tipo == 'usuario' %}
-            {% set kpi_list = [
-                (datos.total, 'Total solicitudes', '#1b4332'),
-                (datos.aprobadas, 'Aprobadas', '#198754'),
-                (datos.rechazadas, 'Rechazadas', '#dc3545'),
-                (datos.en_uso, 'En uso ahora', '#0d6efd'),
-                ((datos.tiempo_total // 60)|string + 'h', 'Tiempo total uso', '#b8901f'),
-            ] %}
-            {% elif tipo == 'recurso' %}
-            {% set kpi_list = [
-                (datos.total_solicitudes, 'Total solicitudes', '#1b4332'),
-                (datos.veces_prestado, 'Veces prestado', '#198754'),
-                ((datos.tiempo_promedio // 60)|string + 'h', 'Tiempo promedio', '#b8901f'),
-            ] %}
-            {% else %}
-            {% set kpi_list = [
-                (datos.total_accesos, 'Total accesos', '#1b4332'),
-                (datos.permitidos, 'Permitidos', '#198754'),
-                (datos.denegados, 'Denegados', '#dc3545'),
-            ] %}
-            {% endif %}
-
-            {% for valor, etiqueta, color in kpi_list %}
-            <div class="col-6 col-md-auto flex-md-fill">
-                <div class="card border-0 bg-light text-center py-3">
-                    <div class="fw-bold" style="font-size:1.8rem;color:{{ color }};">
-                        {{ valor }}
-                    </div>
-                    <div class="text-muted small">{{ etiqueta }}</div>
+    <!-- KPIs -->
+    <div class="row g-3 mb-4">
+        {% if tipo == 'usuario' %}
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                    {{ datos.total }}
                 </div>
+                <div class="text-muted small">Total solicitudes</div>
             </div>
-            {% endfor %}
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                    {{ datos.aprobadas }}
+                </div>
+                <div class="text-muted small">Aprobadas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#dc3545;">
+                    {{ datos.rechazadas }}
+                </div>
+                <div class="text-muted small">Rechazadas</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#0d6efd;">
+                    {{ datos.en_uso }}
+                </div>
+                <div class="text-muted small">En uso ahora</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#b8901f;">
+                    {{ (datos.tiempo_total // 60) }}h
+                </div>
+                <div class="text-muted small">Tiempo total uso</div>
+            </div>
         </div>
 
-        <!-- Gráfica de actividad por mes -->
-        <div class="card border border-0 bg-light p-3">
-            <div class="d-flex justify-content-between mb-2">
-                <span class="fw-semibold small">
-                    <i class="bi bi-graph-up me-1 text-ucundi"></i>Grafica
-                </span>
-                <button class="btn btn-sm btn-outline-secondary"
-                        onclick="descargarGrafica('chartIndividual', 'actividad_individual')">
-                    <i class="bi bi-download"></i>
-                </button>
+        {% elif tipo == 'recurso' %}
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                    {{ datos.total_solicitudes }}
+                </div>
+                <div class="text-muted small">Total solicitudes</div>
             </div>
-            <canvas id="chartIndividual" height="100"></canvas>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                    {{ datos.veces_prestado }}
+                </div>
+                <div class="text-muted small">Veces prestado</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#b8901f;">
+                    {{ (datos.tiempo_promedio // 60) }}h
+                </div>
+                <div class="text-muted small">Tiempo promedio</div>
+            </div>
         </div>
 
-        <!-- Últimos registros -->
-        <div class="mt-4">
-            <h6 class="fw-bold mb-3">Últimos registros</h6>
+        {% elif tipo == 'espacio' %}
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#1b4332;">
+                    {{ datos.total_accesos }}
+                </div>
+                <div class="text-muted small">Total accesos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#198754;">
+                    {{ datos.permitidos }}
+                </div>
+                <div class="text-muted small">Permitidos</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-auto flex-md-fill">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="fw-bold" style="font-size:1.8rem;color:#dc3545;">
+                    {{ datos.denegados }}
+                </div>
+                <div class="text-muted small">Denegados</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Gráfica actividad -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-0 pt-3 pb-2
+                    d-flex justify-content-between">
+            <span class="fw-semibold small">
+                <i class="bi bi-graph-up me-1 text-ucundi"></i>
+                Actividad — período seleccionado
+            </span>
+            <button class="btn btn-sm btn-outline-secondary"
+                    onclick="descargarGrafica()">
+                <i class="bi bi-download"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <canvas id="chartIndividual" height="80"></canvas>
+        </div>
+    </div>
+
+    <!-- Últimos registros -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 pt-3 pb-2">
+            <span class="fw-semibold small">
+                <i class="bi bi-clock-history me-1 text-ucundi"></i>
+                Últimos registros del período
+            </span>
+        </div>
+        <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
                     <thead class="table-light">
                         <tr>
                             {% if tipo == 'usuario' %}
-                            <th>#</th><th>Item</th><th>Fecha</th><th>Estado</th><th>Tiempo</th>
+                            <th class="ps-3">#</th>
+                            <th>Item</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Tiempo</th>
                             {% elif tipo == 'recurso' %}
-                            <th>Usuario</th><th>Fecha</th><th>Estado</th><th>Tiempo uso</th>
+                            <th class="ps-3">Usuario</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Tiempo uso</th>
                             {% else %}
-                            <th>Fecha/Hora</th><th>Usuario</th><th>Tipo</th><th>Resultado</th>
+                            <th class="ps-3">Fecha/Hora</th>
+                            <th>Usuario</th>
+                            <th>Tipo</th>
+                            <th>Resultado</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% if tipo in ['usuario', 'recurso'] %}
-                        {% for s in datos.solicitudes %}
-                        <tr>
-                            {% if tipo == 'usuario' %}
-                            <td class="text-muted small">{{ s.id }}</td>
-                            <td class="small">{{ s.get_item_nombre() }}</td>
+                            {% if datos.solicitudes %}
+                            {% for s in datos.solicitudes %}
+                            <tr>
+                                {% if tipo == 'usuario' %}
+                                <td class="ps-3 text-muted small">{{ s.id }}</td>
+                                <td class="small">{{ s.get_item_nombre() }}</td>
+                                {% else %}
+                                <td class="ps-3 small">
+                                    {{ s.usuario.nombre }}
+                                    {{ s.usuario.apellido }}
+                                </td>
+                                {% endif %}
+                                <td class="small">
+                                    {{ s.fecha_creacion.strftime('%d/%m/%Y') }}
+                                </td>
+                                <td>
+                                    {% if s.estado == 'devuelta' %}
+                                    <span class="badge bg-info text-dark small">
+                                        Devuelta
+                                    </span>
+                                    {% elif s.estado == 'entregado' %}
+                                    <span class="badge bg-success small">
+                                        En uso
+                                    </span>
+                                    {% elif s.estado == 'en_demora' %}
+                                    <span class="badge bg-warning text-dark small">
+                                        En demora
+                                    </span>
+                                    {% elif s.estado == 'rechazada' %}
+                                    <span class="badge bg-danger small">
+                                        Rechazada
+                                    </span>
+                                    {% elif s.estado == 'aprobada' %}
+                                    <span class="badge bg-primary small">
+                                        Aprobada
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary small">
+                                        {{ s.estado }}
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {% if s.tiempo_uso_minutos %}
+                                    {{ s.tiempo_uso_minutos // 60 }}h
+                                    {{ s.tiempo_uso_minutos % 60 }}min
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
                             {% else %}
-                            <td class="small">
-                                {{ s.usuario.nombre }} {{ s.usuario.apellido }}
-                            </td>
+                            <tr>
+                                <td colspan="5"
+                                    class="text-center py-3 text-muted small">
+                                    Sin registros en este período.
+                                </td>
+                            </tr>
                             {% endif %}
-                            <td class="small">
-                                {{ s.fecha_creacion.strftime('%d/%m/%Y') }}
-                            </td>
-                            <td>
-                                {% if s.estado == 'devuelta' %}
-                                <span class="badge bg-info text-dark small">Devuelta</span>
-                                {% elif s.estado == 'entregado' %}
-                                <span class="badge bg-success small">En uso</span>
-                                {% elif s.estado == 'rechazada' %}
-                                <span class="badge bg-danger small">Rechazada</span>
-                                {% else %}
-                                <span class="badge bg-secondary small">{{ s.estado }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="small">
-                                {% if s.tiempo_uso_minutos %}
-                                {{ s.tiempo_uso_minutos // 60 }}h
-                                {{ s.tiempo_uso_minutos % 60 }}min
-                                {% else %}—{% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
+
                         {% else %}
-                        {% for a in datos.accesos %}
-                        <tr>
-                            <td class="small">
-                                {{ a.fecha_evento.strftime('%d/%m/%Y %H:%M') }}
-                            </td>
-                            <td class="small">
-                                {{ a.usuario.nombre ~ ' ' ~ a.usuario.apellido if a.usuario else 'Desconocido' }}
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary small">
-                                    {{ a.tipo_evento | capitalize }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if a.autorizado %}
-                                <span class="badge bg-success small">✅ Permitido</span>
-                                {% else %}
-                                <span class="badge bg-danger small">❌ Denegado</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
+                            {% if datos.accesos %}
+                            {% for a in datos.accesos %}
+                            <tr>
+                                <td class="ps-3 small">
+                                    {{ a.fecha_evento.strftime('%d/%m/%Y %H:%M') }}
+                                </td>
+                                <td class="small">
+                                    {% if a.usuario %}
+                                    {{ a.usuario.nombre }} {{ a.usuario.apellido }}
+                                    {% else %}
+                                    <span class="text-muted">Desconocido</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary small">
+                                        {{ a.tipo_evento | capitalize }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if a.autorizado %}
+                                    <span class="badge bg-success small">
+                                        ✅ Permitido
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-danger small">
+                                        ❌ Denegado
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="4"
+                                    class="text-center py-3 text-muted small">
+                                    Sin accesos en este período.
+                                </td>
+                            </tr>
+                            {% endif %}
                         {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+
 </div>
 
 {% else %}
@@ -317,7 +460,9 @@ function cambiarTipo() {
     <div class="card-body text-center py-5">
         <i class="bi bi-bar-chart fs-1 text-muted d-block mb-3"></i>
         <h5 class="fw-bold">Selecciona un elemento para analizar</h5>
-        <p class="text-muted">Elige un usuario, recurso o espacio y haz clic en Analizar.</p>
+        <p class="text-muted">
+            Elige el tipo, luego el elemento y haz clic en Analizar.
+        </p>
     </div>
 </div>
 {% endif %}
@@ -330,111 +475,101 @@ function cambiarTipo() {
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
-    const charts = {};
-    const TIPO = "{{ tipo }}";
-    const ITEM_ID = {{ item_id or 0 }};
-    const PERIODO = "{{ periodo }}";
+let chartIndividual = null;
+const TIPO    = "{{ tipo }}";
+const ITEM_ID = {{ item_id or 0 }};
+const PERIODO = "{{ periodo }}";
+const FECHA_DESDE = "{{ fecha_desde }}";
+const FECHA_HASTA = "{{ fecha_hasta }}";
 
-    {% if item %}
-  //  const FECHA_DESDE = "{{ request.args.get('fecha_desde', '') }}";
-    const FECHA_DESDE = "{{ fecha_desde }}";
-    const FECHA_HASTA = "{{ fecha_hasta }}";
-
-
-    function toggleFechas() {
+function toggleFechas() {
     const p = document.getElementById('selectPeriodo').value;
     const mostrar = p === 'personalizado';
     document.getElementById('colDesde').style.display = mostrar ? '' : 'none';
     document.getElementById('colHasta').style.display = mostrar ? '' : 'none';
-    }
+}
 
-    function toggleFechas() {
-    const p = document.getElementById('selectPeriodo').value;
-    const mostrar = p === 'personalizado';
-    document.getElementById('colDesde').style.display = mostrar ? '' : 'none';
-    document.getElementById('colHasta').style.display = mostrar ? '' : 'none';
-
-    }
-
-    function cambiarTipo() {
+function cambiarTipo() {
     const tipo = document.querySelector('select[name="tipo"]').value;
     const periodo = document.getElementById('selectPeriodo').value;
     const desde = document.getElementById('inputDesde')?.value || '';
     const hasta = document.getElementById('inputHasta')?.value || '';
     window.location.href =
         `/estadisticas/individual?tipo=${tipo}&periodo=${periodo}`
-        + `&fecha_desde=${desde}&fecha_hasta=${hasta}`; 
-    }
+        + `&fecha_desde=${desde}&fecha_hasta=${hasta}`;
+}
 
-    {% if item %}
-    fetch(`/estadisticas/api/individual/solicitudes-por-mes`
-        + `?tipo=${TIPO}&id=${ITEM_ID}&periodo=${PERIODO}`
-        + `&fecha_desde=${FECHA_DESDE}&fecha_hasta=${FECHA_HASTA}`)
-        .then(r => r.json())
-        .then(d => {
-            const ctx = document.getElementById('chartIndividual');
-            if (!ctx) return;
-            chartIndividual = new Chart(ctx, {
-                type: PERIODO === 'semana' ? 'line' : 'bar',
-                data: {
-                    labels: d.labels,
-                    datasets: [{
-                        label: 'Actividad',
-                        data: d.data,
-                        backgroundColor: '#1b4332',
-                        borderColor: '#1b4332',
-                        borderRadius: 4,
-                        tension: 0.3,
-                        fill: PERIODO === 'semana'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                    }
+{% if item %}
+fetch(`/estadisticas/api/individual/solicitudes-por-mes`
+    + `?tipo=${TIPO}&id=${ITEM_ID}&periodo=${PERIODO}`
+    + `&fecha_desde=${FECHA_DESDE}&fecha_hasta=${FECHA_HASTA}`)
+    .then(r => r.json())
+    .then(d => {
+        const ctx = document.getElementById('chartIndividual');
+        if (!ctx) return;
+        chartIndividual = new Chart(ctx, {
+            type: (PERIODO === 'semana' || PERIODO === 'mes') ? 'line' : 'bar',
+            data: {
+                labels: d.labels,
+                datasets: [{
+                    label: 'Actividad',
+                    data: d.data,
+                    backgroundColor: '#1b433288',
+                    borderColor: '#1b4332',
+                    borderRadius: 4,
+                    tension: 0.3,
+                    fill: PERIODO === 'semana'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
                 }
-            });
+            }
         });
-    {% endif %}
+    });
+{% endif %}
 
-    function descargarGrafica(chartId, nombre) {
-        const chart = charts[chartId];
-        if (!chart) return;
-        const a = document.createElement('a');
-        a.href = chart.toBase64Image();
-        a.download = `${nombre}.png`;
-        a.click();
-    }
+function descargarGrafica() {
+    if (!chartIndividual) return;
+    const a = document.createElement('a');
+    a.href = chartIndividual.toBase64Image();
+    a.download = `actividad_${TIPO}_${ITEM_ID}.png`;
+    a.click();
+}
 
-    async function exportarPDF() {
-        const { jsPDF } = window.jspdf;
-        const btn = document.querySelector('button[onclick="exportarPDF()"]');
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
+async function exportarPDF() {
+    const { jsPDF } = window.jspdf;
+    const btn = document.querySelector('button[onclick="exportarPDF()"]');
+    if (btn) {
+        btn.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
         btn.disabled = true;
-
-        const canvas = await html2canvas(
-            document.getElementById('seccionIndividual') || document.body,
-            { scale: 1.5, useCORS: true, backgroundColor: '#ffffff' }
-        );
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfW = pdf.internal.pageSize.getWidth();
-        const pdfH = (canvas.height * pdfW) / canvas.width;
-        const pageH = pdf.internal.pageSize.getHeight();
-        let posY = 0;
-
-        for (let i = 0; i < Math.ceil(pdfH / pageH); i++) {
-            if (i > 0) pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
-            posY += pageH;
-        }
-
-        pdf.save(`estadistica_${TIPO}_${ITEM_ID}.pdf`);
+    }
+    const el = document.getElementById('seccionIndividual') || document.body;
+    const canvas = await html2canvas(el, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+    });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = (canvas.height * pdfW) / canvas.width;
+    const pageH = pdf.internal.pageSize.getHeight();
+    let posY = 0;
+    for (let i = 0; i < Math.ceil(pdfH / pageH); i++) {
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, -posY, pdfW, pdfH);
+        posY += pageH;
+    }
+    pdf.save(`estadistica_${TIPO}_${ITEM_ID}.pdf`);
+    if (btn) {
         btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF';
         btn.disabled = false;
     }
+}
 </script>
 {% endblock %}
