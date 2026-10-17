@@ -9,6 +9,7 @@ from app.estadisticas import bp
 from app.models import (Solicitud, Recurso, Espacio, User,
                         RegistroAcceso, DispositivoRFID, PermisoAcceso)
 
+
 BOGOTA_TZ = pytz.timezone('America/Bogota')
 
 
@@ -53,7 +54,6 @@ def _rango_fechas(periodo, fecha_desde_str='', fecha_hasta_str=''):
     elif periodo == 'anio':
         return ahora - timedelta(days=365), ahora
     return None, None
-
 
 
 # ── Dashboard principal ────────────────────────────────────────────────────────
@@ -120,6 +120,8 @@ def dashboard():
                            usuarios=usuarios,
                            espacios=espacios,
                            recursos_lista=recursos_lista)
+
+
 # ── APIs de datos para Chart.js ────────────────────────────────────────────────
 
 @bp.route('/api/solicitudes-por-estado')
@@ -147,7 +149,6 @@ def api_solicitudes_estado():
     })
 
 
-
 @bp.route('/api/solicitudes-por-mes')
 @login_required
 @admin_o_operador
@@ -157,7 +158,6 @@ def api_solicitudes_mes():
     labels, aprobadas, rechazadas, totales = [], [], [], []
 
     if periodo == 'semana':
-        # Últimos 7 días agrupados por día
         for i in range(6, -1, -1):
             fecha = ahora - timedelta(days=i)
             ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -176,7 +176,6 @@ def api_solicitudes_mes():
             ).count())
 
     elif periodo == 'mes':
-        # Últimos 30 días agrupados por día
         for i in range(29, -1, -1):
             fecha = ahora - timedelta(days=i)
             ini = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -195,7 +194,6 @@ def api_solicitudes_mes():
             ).count())
 
     elif periodo == 'trimestre':
-        # Últimas 13 semanas agrupadas por semana
         for i in range(12, -1, -1):
             fin = ahora - timedelta(weeks=i)
             ini = fin - timedelta(days=6)
@@ -213,7 +211,6 @@ def api_solicitudes_mes():
             ).count())
 
     else:
-        # anio o personalizado: últimos 12 meses agrupados por mes
         for i in range(11, -1, -1):
             fecha = ahora - timedelta(days=30 * i)
             mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
@@ -245,10 +242,6 @@ def api_solicitudes_mes():
     })
 
 
-
-
-
-
 @bp.route('/api/recursos-mas-solicitados')
 @login_required
 @admin_o_operador
@@ -257,6 +250,7 @@ def api_recursos_solicitados():
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
     q = db.session.query(
+        Recurso.id,
         Recurso.nombre,
         db.func.count(Solicitud.id).label('total')
     ).join(Solicitud, Solicitud.recurso_id == Recurso.id)
@@ -266,7 +260,7 @@ def api_recursos_solicitados():
     if fecha_fin:
         q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
 
-    resultados = q.group_by(Recurso.id).order_by(
+    resultados = q.group_by(Recurso.id, Recurso.nombre).order_by(
         db.func.count(Solicitud.id).desc()
     ).limit(10).all()
 
@@ -285,6 +279,7 @@ def api_espacios_accedidos():
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
     q = db.session.query(
+        Espacio.id,
         Espacio.nombre,
         db.func.count(RegistroAcceso.id).label('total')
     ).join(RegistroAcceso, RegistroAcceso.espacio_id == Espacio.id)
@@ -294,7 +289,7 @@ def api_espacios_accedidos():
     if fecha_fin:
         q = q.filter(RegistroAcceso.fecha_evento <= fecha_fin)
 
-    resultados = q.group_by(Espacio.id).order_by(
+    resultados = q.group_by(Espacio.id, Espacio.nombre).order_by(
         db.func.count(RegistroAcceso.id).desc()
     ).limit(8).all()
 
@@ -315,24 +310,31 @@ def api_accesos_hora():
     periodo = request.args.get('periodo', 'mes')
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
-    horas = list(range(0, 24))
-    permitidos = []
-    denegados = []
+    hora_expr = db.func.datepart(db.text('hour'),
+                                 RegistroAcceso.fecha_evento)
+    q_base = RegistroAcceso.query
+    if fecha_ini:
+        q_base = q_base.filter(RegistroAcceso.fecha_evento >= fecha_ini)
+    if fecha_fin:
+        q_base = q_base.filter(RegistroAcceso.fecha_evento <= fecha_fin)
 
-    for h in horas:
-        q_base = RegistroAcceso.query.filter(
-            db.func.strftime('%H', RegistroAcceso.fecha_evento) == f'{h:02d}'
-        )
-        if fecha_ini:
-            q_base = q_base.filter(RegistroAcceso.fecha_evento >= fecha_ini)
-        if fecha_fin:
-            q_base = q_base.filter(RegistroAcceso.fecha_evento <= fecha_fin)
+    filas = q_base.with_entities(
+        hora_expr.label('hora'),
+        RegistroAcceso.autorizado,
+        db.func.count(RegistroAcceso.id).label('total')
+    ).group_by(hora_expr, RegistroAcceso.autorizado).all()
 
-        permitidos.append(q_base.filter_by(autorizado=True).count())
-        denegados.append(q_base.filter_by(autorizado=False).count())
+    permitidos = [0] * 24
+    denegados = [0] * 24
+    for fila in filas:
+        h = int(fila.hora)
+        if fila.autorizado:
+            permitidos[h] = fila.total
+        else:
+            denegados[h] = fila.total
 
     return jsonify({
-        'labels': [f'{h:02d}:00' for h in horas],
+        'labels': [f'{h:02d}:00' for h in range(24)],
         'datasets': [
             {'label': 'Permitidos', 'data': permitidos, 'color': '#198754'},
             {'label': 'Denegados', 'data': denegados, 'color': '#dc3545'},
@@ -348,6 +350,7 @@ def api_tiempo_uso():
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
     q = db.session.query(
+        Recurso.id,
         Recurso.nombre,
         db.func.avg(Solicitud.tiempo_uso_minutos).label('promedio')
     ).join(Solicitud, Solicitud.recurso_id == Recurso.id).filter(
@@ -359,7 +362,7 @@ def api_tiempo_uso():
     if fecha_fin:
         q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
 
-    resultados = q.group_by(Recurso.id).order_by(
+    resultados = q.group_by(Recurso.id, Recurso.nombre).order_by(
         db.func.avg(Solicitud.tiempo_uso_minutos).desc()
     ).limit(8).all()
 
@@ -383,6 +386,7 @@ def api_usuarios_activos():
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
     q = db.session.query(
+        User.id,
         User.nombre,
         User.apellido,
         db.func.count(Solicitud.id).label('total')
@@ -393,7 +397,7 @@ def api_usuarios_activos():
     if fecha_fin:
         q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
 
-    resultados = q.group_by(User.id).order_by(
+    resultados = q.group_by(User.id, User.nombre, User.apellido).order_by(
         db.func.count(Solicitud.id).desc()
     ).limit(8).all()
 
@@ -405,7 +409,6 @@ def api_usuarios_activos():
 
 
 # ── Estadística individual ─────────────────────────────────────────────────────
-
 
 @bp.route('/individual')
 @login_required
@@ -447,7 +450,7 @@ def individual():
     }
 
     if tipo == 'usuario' and item_id:
-        usuario = User.query.get(item_id)
+        usuario = db.session.get(User, item_id)
         if usuario:
             q = Solicitud.query.filter_by(usuario_id=item_id)
             if fecha_ini:
@@ -460,7 +463,7 @@ def individual():
                 'total': len(todas),
                 'aprobadas': sum(1 for s in todas
                                  if s.estado in ['aprobada', 'entregado',
-                                                  'devuelta']),
+                                                 'devuelta']),
                 'rechazadas': sum(1 for s in todas
                                   if s.estado == 'rechazada'),
                 'en_uso': sum(1 for s in todas
@@ -471,7 +474,7 @@ def individual():
             }
 
     elif tipo == 'recurso' and item_id:
-        recurso = Recurso.query.get(item_id)
+        recurso = db.session.get(Recurso, item_id)
         if recurso:
             q = Solicitud.query.filter_by(recurso_id=item_id)
             if fecha_ini:
@@ -494,7 +497,7 @@ def individual():
             }
 
     elif tipo == 'espacio' and item_id:
-        espacio = Espacio.query.get(item_id)
+        espacio = db.session.get(Espacio, item_id)
         if espacio:
             q = RegistroAcceso.query.filter_by(espacio_id=item_id)
             if fecha_ini:
@@ -513,7 +516,6 @@ def individual():
     return render_template('estadisticas/individual.html', **contexto)
 
 
-
 @bp.route('/api/individual/solicitudes-por-mes')
 @login_required
 @admin_o_operador
@@ -529,7 +531,6 @@ def api_individual_solicitudes():
     datos = []
 
     if periodo == 'personalizado':
-        # Para personalizado: agrupar por día dentro del rango
         fecha_ini, fecha_fin = _rango_fechas(
             'personalizado', fecha_desde_str, fecha_hasta_str
         )
@@ -541,7 +542,6 @@ def api_individual_solicitudes():
         diff_dias = (fecha_fin - fecha_ini).days
 
         if diff_dias <= 31:
-            # Agrupar por día
             for i in range(diff_dias + 1):
                 fecha = fecha_ini + timedelta(days=i)
                 dia_ini = fecha.replace(
@@ -553,7 +553,6 @@ def api_individual_solicitudes():
                     tipo, item_id, dia_ini, dia_fin
                 ))
         elif diff_dias <= 90:
-            # Agrupar por semana
             semanas = diff_dias // 7 + 1
             for i in range(semanas):
                 sem_ini = fecha_ini + timedelta(weeks=i)
@@ -563,7 +562,6 @@ def api_individual_solicitudes():
                     tipo, item_id, sem_ini, sem_fin
                 ))
         else:
-            # Agrupar por mes
             cursor = fecha_ini.replace(
                 day=1, hour=0, minute=0, second=0
             )
@@ -604,7 +602,6 @@ def api_individual_solicitudes():
             datos.append(_contar_actividad(tipo, item_id, sem_ini, sem_fin))
 
     else:
-        # anio o default: últimos 12 meses por mes
         for i in range(11, -1, -1):
             fecha = ahora - timedelta(days=30 * i)
             mes_ini = fecha.replace(day=1, hour=0, minute=0, second=0)
@@ -616,9 +613,8 @@ def api_individual_solicitudes():
             labels.append(fecha.strftime('%b %Y'))
             datos.append(_contar_actividad(tipo, item_id, mes_ini, mes_fin))
 
-    return jsonify({'labels': labels, 'data': datos, 'color': '#1b4332'})    
-    
-    
+    return jsonify({'labels': labels, 'data': datos, 'color': '#1b4332'})
+
 
 def _contar_actividad(tipo, item_id, fecha_ini, fecha_fin):
     """Helper para contar eventos en un rango de fechas."""
@@ -642,6 +638,7 @@ def _contar_actividad(tipo, item_id, fecha_ini, fecha_fin):
         ).count()
     return 0
 
+
 # ── Exportar Excel del dashboard ───────────────────────────────────────────────
 
 @bp.route('/exportar/excel')
@@ -656,7 +653,8 @@ def exportar_excel():
     fecha_ini, fecha_fin = _rango_fechas(periodo)
 
     wb = openpyxl.Workbook()
-    verde_fill = PatternFill(start_color='1b4332', end_color='1b4332', fill_type='solid')
+    verde_fill = PatternFill(start_color='1b4332', end_color='1b4332',
+                             fill_type='solid')
     header_font = Font(name='Calibri', bold=True, color='FFFFFF', size=11)
     data_font = Font(name='Calibri', size=10)
     center = Alignment(horizontal='center', vertical='center')
@@ -727,12 +725,12 @@ def exportar_excel():
     # Hoja 2: Recursos más solicitados
     ws2 = wb.create_sheet('Recursos top')
     res_q = db.session.query(
-        Recurso.nombre, Recurso.serial,
+        Recurso.id, Recurso.nombre, Recurso.serial,
         db.func.count(Solicitud.id).label('total')
     ).join(Solicitud, Solicitud.recurso_id == Recurso.id)
     if fecha_ini:
         res_q = res_q.filter(Solicitud.fecha_creacion >= fecha_ini)
-    res_top = res_q.group_by(Recurso.id).order_by(
+    res_top = res_q.group_by(Recurso.id, Recurso.nombre, Recurso.serial).order_by(
         db.func.count(Solicitud.id).desc()
     ).all()
     escribir_hoja(ws2, 'Recursos más solicitados',
@@ -755,7 +753,7 @@ def exportar_excel():
             a.espacio.nombre if a.espacio else '—',
             a.dispositivo.codigo if a.dispositivo else '—',
             a.tipo_evento.capitalize(),
-            '✅ Permitido' if a.autorizado else '❌ Denegado',
+            'Permitido' if a.autorizado else 'Denegado',
             a.motivo_denegacion or '—'
         ])
     escribir_hoja(ws3, 'Registros de acceso RFID',
@@ -766,12 +764,12 @@ def exportar_excel():
     # Hoja 4: Usuarios más activos
     ws4 = wb.create_sheet('Usuarios activos')
     usr_q = db.session.query(
-        User.nombre, User.apellido,
+        User.id, User.nombre, User.apellido,
         db.func.count(Solicitud.id).label('total')
     ).join(Solicitud, Solicitud.usuario_id == User.id)
     if fecha_ini:
         usr_q = usr_q.filter(Solicitud.fecha_creacion >= fecha_ini)
-    usr_top = usr_q.group_by(User.id).order_by(
+    usr_top = usr_q.group_by(User.id, User.nombre, User.apellido).order_by(
         db.func.count(Solicitud.id).desc()
     ).all()
     escribir_hoja(ws4, 'Usuarios más activos',
@@ -785,7 +783,6 @@ def exportar_excel():
     return send_file(buf,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                      as_attachment=True, download_name=nombre)
-    
 
 
 @bp.route('/exportar/csv-ml', methods=['GET', 'POST'])
@@ -795,7 +792,6 @@ def exportar_csv_ml():
     import csv
     from io import StringIO
 
-    # Definición de todos los campos disponibles
     CAMPOS_DISPONIBLES = {
         'solicitud_id':             'ID de solicitud',
         'usuario_id':               'ID de usuario',
@@ -825,15 +821,12 @@ def exportar_csv_ml():
         'estado_devolucion':        'TARGET: Estado devolución',
     }
 
-    # Si es GET, mostrar el formulario
     if request.method == 'GET':
-        from app.models import Role
         return render_template(
             'estadisticas/csv_ml_config.html',
             campos=CAMPOS_DISPONIBLES
         )
 
-    # Si es POST, generar el CSV con los parámetros seleccionados
     campos_sel = request.form.getlist('campos')
     fecha_desde_str = request.form.get('fecha_desde', '').strip()
     fecha_hasta_str = request.form.get('fecha_hasta', '').strip()
@@ -859,7 +852,6 @@ def exportar_csv_ml():
         q = q.filter(Solicitud.fecha_creacion <= fecha_fin)
     solicitudes = q.order_by(Solicitud.fecha_creacion.asc()).all()
 
-    # Caché de métricas
     cache_usuario = {}
 
     def _metricas(usuario_id, hasta):
@@ -906,7 +898,6 @@ def exportar_csv_ml():
         cache_recurso[key] = n
         return n
 
-    # Construir filas
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow([CAMPOS_DISPONIBLES[c] for c in campos_sel])

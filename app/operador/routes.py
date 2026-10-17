@@ -462,25 +462,30 @@ def eliminar_dispositivo(dispositivo_id):
 @login_required
 @operador_required
 def permisos():
+    import math
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 15, type=int)
     if per_page not in [15, 30, 50]:
         per_page = 15
     dispositivo_filtro = request.args.get('dispositivo_id', 0, type=int)
 
-    # Obtener UIDs únicos con paginación
-    query = db.session.query(
-        PermisoAcceso.uid_tarjeta,
-        PermisoAcceso.usuario_id
-    ).distinct()
+    # Paginamos por usuario_id (columna real); el uid depende del usuario
+    query = db.session.query(PermisoAcceso.usuario_id).distinct()
 
     if dispositivo_filtro:
         query = query.filter(PermisoAcceso.dispositivo_id == dispositivo_filtro)
 
     total_uids = query.count()
-    uids_pagina = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    # Para cada UID obtener todos sus permisos agrupados
+    usuarios_pagina = (
+        query
+        .order_by(PermisoAcceso.usuario_id.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
     class GrupoPermiso:
         def __init__(self, usuario, uid_tarjeta, permisos):
             self.usuario = usuario
@@ -488,16 +493,15 @@ def permisos():
             self.permisos = permisos
 
     grupos = []
-    for uid_tarjeta, usuario_id in uids_pagina:
-        usuario = User.query.get(usuario_id)
-        q = PermisoAcceso.query.filter_by(uid_tarjeta=uid_tarjeta, usuario_id=usuario_id)
+    for (usuario_id,) in usuarios_pagina:
+        usuario = db.session.get(User, usuario_id)
+        q = PermisoAcceso.query.filter(PermisoAcceso.usuario_id == usuario_id)
         if dispositivo_filtro:
-            q = q.filter_by(dispositivo_id=dispositivo_filtro)
-        perms = q.all()
+            q = q.filter(PermisoAcceso.dispositivo_id == dispositivo_filtro)
+        perms = q.order_by(PermisoAcceso.id.asc()).all()
+        uid_tarjeta = perms[0].uid_tarjeta if perms else None
         grupos.append(GrupoPermiso(usuario, uid_tarjeta, perms))
 
-    # Objeto de paginación manual
-    import math
     class PageInfo:
         def __init__(self, page, per_page, total):
             self.page = page
@@ -516,13 +520,23 @@ def permisos():
     page_info = PageInfo(page, per_page, total_uids)
     dispositivos = DispositivoRFID.query.filter_by(activo=True).all()
 
-    return render_template('operador/permisos.html',
-                           grupos=grupos,
-                           page_info=page_info,
-                           dispositivos=dispositivos,
-                           dispositivo_filtro=dispositivo_filtro,
-                           per_page=per_page)
+    return render_template(
+        'operador/permisos.html',
+        grupos=grupos,
+        page_info=page_info,
+        dispositivos=dispositivos,
+        dispositivo_filtro=dispositivo_filtro,
+        per_page=per_page
+    )
 
+    return render_template(
+        'operador/permisos.html',
+        grupos=grupos,
+        page_info=page_info,
+        dispositivos=dispositivos,
+        dispositivo_filtro=dispositivo_filtro,
+        per_page=per_page
+    )
 
 @bp.route('/permisos/nuevo', methods=['GET', 'POST'])
 @login_required

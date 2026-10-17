@@ -1,7 +1,12 @@
-from app import db, login_manager
-from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+import json
 from datetime import datetime, time
+
+from flask_login import UserMixin
+from sqlalchemy import select
+from sqlalchemy.ext.hybrid import hybrid_property
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from app import db, login_manager
 
 
 class Role(db.Model):
@@ -26,7 +31,6 @@ class User(UserMixin, db.Model):
     activo = db.Column(db.Boolean, default=True)
     intentos_fallidos = db.Column(db.Integer, default=0)
     bloqueado_hasta = db.Column(db.DateTime, nullable=True)
-    uid_tarjeta = db.Column(db.String(50), nullable=True, unique=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow,
                                     onupdate=datetime.utcnow)
@@ -38,6 +42,27 @@ class User(UserMixin, db.Model):
         lazy='dynamic'
     )
     permisos_acceso = db.relationship('PermisoAcceso', backref='usuario', lazy='dynamic')
+    tarjeta = db.relationship('Tarjeta', backref='usuario', uselist=False,
+                              cascade='all, delete-orphan')
+
+    # uid_tarjeta ahora vive en la tabla 'tarjetas'; se mantiene como alias
+    @hybrid_property
+    def uid_tarjeta(self):
+        return self.tarjeta.uid if self.tarjeta else None
+
+    @uid_tarjeta.setter
+    def uid_tarjeta(self, v):
+        v = (v or '').strip()
+        if not v:
+            self.tarjeta = None
+        elif self.tarjeta:
+            self.tarjeta.uid = v
+        else:
+            self.tarjeta = Tarjeta(uid=v)
+
+    @uid_tarjeta.expression
+    def uid_tarjeta(cls):
+        return select(Tarjeta.uid).where(Tarjeta.usuario_id == cls.id).scalar_subquery()
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -66,7 +91,7 @@ class User(UserMixin, db.Model):
         return self.role.name if self.role else 'sin_rol'
 
     def tiene_tarjeta(self):
-        return bool(self.uid_tarjeta)
+        return bool(self.tarjeta)
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -74,7 +99,19 @@ class User(UserMixin, db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
+
+
+class Tarjeta(db.Model):
+    __tablename__ = 'tarjetas'
+    id = db.Column(db.Integer, primary_key=True)
+    uid = db.Column(db.String(50), unique=True, nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'),
+                           unique=True, nullable=False)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Tarjeta {self.uid}>'
 
 
 class TipoEspacio(db.Model):
@@ -121,9 +158,9 @@ class Recurso(db.Model):
     __tablename__ = 'recursos'
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(150), nullable=False)
-    codigo = db.Column(db.String(50), unique=True, nullable=False)  # ✅ esta línea
-    serial = db.Column(db.String(100), unique=True, nullable=True)
-    codigo_interno = db.Column(db.String(50), unique=True, nullable=True)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)
+    serial = db.Column(db.String(100), nullable=True)
+    codigo_interno = db.Column(db.String(50), nullable=True)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias_recurso.id'),
                              nullable=False)
     descripcion = db.Column(db.Text)
@@ -134,13 +171,20 @@ class Recurso(db.Model):
     solicitudes = db.relationship('Solicitud', backref='recurso', lazy='dynamic')
     inventario_scans = db.relationship('InventarioScan', backref='recurso', lazy='dynamic')
 
+    __table_args__ = (
+        db.Index('uq_recursos_serial', 'serial', unique=True,
+                 mssql_where=db.text('serial IS NOT NULL'),
+                 sqlite_where=db.text('serial IS NOT NULL')),
+        db.Index('uq_recursos_codigo_interno', 'codigo_interno', unique=True,
+                 mssql_where=db.text('codigo_interno IS NOT NULL'),
+                 sqlite_where=db.text('codigo_interno IS NOT NULL')),
+    )
+
     def esta_disponible(self):
         return self.estado == 'disponible'
 
     def __repr__(self):
         return f'<Recurso {self.serial or self.nombre}>'
-
-
 class Solicitud(db.Model):
     __tablename__ = 'solicitudes'
     id = db.Column(db.Integer, primary_key=True)
@@ -149,7 +193,6 @@ class Solicitud(db.Model):
     espacio_id = db.Column(db.Integer, db.ForeignKey('espacios.id'), nullable=True)
     recurso_id = db.Column(db.Integer, db.ForeignKey('recursos.id'), nullable=True)
     uid_tarjeta = db.Column(db.String(50), nullable=True)
-    dispositivos_solicitados = db.Column(db.Text, nullable=True)
 
     # Para recursos: fecha_inicio la pone el sistema al entregar
     # fecha_fin la pone el usuario al solicitar (cuándo planea devolver)
@@ -161,7 +204,6 @@ class Solicitud(db.Model):
 
     # Estados recurso: pendiente → aprobada → entregado → devuelta
     # Estados rfid:    pendiente → aprobada → rechazada
-    # También: rechazada
     estado = db.Column(db.String(20), default='pendiente')
     motivo_rechazo = db.Column(db.Text)
 
@@ -175,6 +217,31 @@ class Solicitud(db.Model):
     novedad_devolucion = db.Column(db.Text, nullable=True)
     tiempo_uso_minutos = db.Column(db.Integer, nullable=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+
+    dispositivos = db.relationship('SolicitudDispositivo', backref='solicitud',
+                                   cascade='all, delete-orphan')
+
+    # Alias de compatibilidad: antes era un JSON en una columna de texto
+    @property
+    def dispositivos_solicitados(self):
+        if not self.dispositivos:
+            return None
+        return json.dumps([d.dispositivo_id for d in self.dispositivos])
+
+    @dispositivos_solicitados.setter
+    def dispositivos_solicitados(self, v):
+        if isinstance(v, str):
+            try:
+                v = json.loads(v) if v else []
+            except Exception:
+                v = []
+        ids = set()
+        for i in (v or []):
+            try:
+                ids.add(int(i))
+            except (TypeError, ValueError):
+                pass
+        self.dispositivos = [SolicitudDispositivo(dispositivo_id=i) for i in ids]
 
     def fecha_fin_efectiva(self):
         return self.fecha_fin_extendida or self.fecha_fin
@@ -192,16 +259,18 @@ class Solicitud(db.Model):
         return '—'
 
     def get_dispositivos_ids(self):
-        import json
-        if self.dispositivos_solicitados:
-            try:
-                return json.loads(self.dispositivos_solicitados)
-            except Exception:
-                return []
-        return []
+        return [d.dispositivo_id for d in self.dispositivos]
 
     def __repr__(self):
         return f'<Solicitud {self.id} - {self.estado}>'
+
+
+class SolicitudDispositivo(db.Model):
+    __tablename__ = 'solicitud_dispositivos'
+    solicitud_id = db.Column(db.Integer, db.ForeignKey('solicitudes.id'),
+                             primary_key=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'),
+                               primary_key=True)
 
 
 class DispositivoRFID(db.Model):
@@ -251,11 +320,24 @@ class PermisoAcceso(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     dispositivo_id = db.Column(db.Integer, db.ForeignKey('dispositivos_rfid.id'),
                                nullable=False)
-    uid_tarjeta = db.Column(db.String(50), nullable=False)
     hora_inicio = db.Column(db.String(5), nullable=True)
     hora_fin = db.Column(db.String(5), nullable=True)
     activo = db.Column(db.Boolean, default=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Derivado de la tarjeta del usuario (solo lectura; el setter se ignora)
+    @hybrid_property
+    def uid_tarjeta(self):
+        return self.usuario.uid_tarjeta if self.usuario else None
+
+    @uid_tarjeta.setter
+    def uid_tarjeta(self, v):
+        pass
+
+    @uid_tarjeta.expression
+    def uid_tarjeta(cls):
+        return select(Tarjeta.uid).where(
+            Tarjeta.usuario_id == cls.usuario_id).scalar_subquery()
 
     def en_horario_permitido(self, hora_actual, horario_global=None):
         try:
@@ -273,7 +355,7 @@ class PermisoAcceso(db.Model):
             return True
 
     def __repr__(self):
-        return f'<PermisoAcceso uid={self.uid_tarjeta}>'
+        return f'<PermisoAcceso usuario={self.usuario_id} disp={self.dispositivo_id}>'
 
 
 class RegistroAcceso(db.Model):
@@ -307,7 +389,7 @@ class InventarioScan(db.Model):
     operador = db.relationship('User', foreign_keys=[operador_id])
     fecha_scan = db.Column(db.DateTime, default=datetime.utcnow)
     observacion = db.Column(db.Text)
-    sesion_inventario = db.Column(db.String(50))  # ID de sesión para agrupar escaneos
+    sesion_inventario = db.Column(db.String(50))
 
     def __repr__(self):
         return f'<InventarioScan recurso={self.recurso_id}>'
